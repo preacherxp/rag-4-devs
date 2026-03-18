@@ -1,0 +1,15 @@
+services:
+  ai-devs-rag-pgvector:
+    image: pgvector/pgvector:pg17
+    container_name: ai-devs-rag-pgvector
+    environment:
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: rag
+      POSTGRES_DB: rag
+    ports:
+      - "5433:5432"
+    volumes:
+      - ai-devs-rag-pgvector-data:/var/lib/postgresql/data
+
+volumes:
+  ai-devs-rag-pgvector-data:
