@@ -1,5 +1,6 @@
 import { getRecentMessages } from "../chat/store.js";
 import { streamChat, type ChatMessage } from "../lmstudio/index.js";
+import { DEFAULT_CHAT_PROVIDER } from "../config.js";
 import { getClientForProvider } from "../llm.js";
 import { searchChunks, type SearchResult } from "./search.js";
 import { assembleContext, sourceLabel } from "./context.js";
@@ -42,7 +43,7 @@ export async function* ragStream(
   sessionId: string,
   model: string,
   historyBeforeSequence?: number,
-  provider = "lmstudio",
+  provider = DEFAULT_CHAT_PROVIDER,
   focusDocumentId?: number,
 ): AsyncGenerator<{ type: "token"; data: string } | { type: "sources"; data: SourceMeta[] }> {
   const results = await searchChunks(query, 5, 0.3, focusDocumentId);

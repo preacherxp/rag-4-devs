@@ -141,6 +141,34 @@ select:focus {
   font-weight: 500;
 }
 
+.sidebar-search {
+  width: 100%;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 150ms, background 150ms, box-shadow 150ms;
+}
+
+.sidebar-search::placeholder {
+  color: var(--text-3);
+}
+
+.sidebar-search:focus {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 1px var(--amber-glow);
+  background: var(--surface-2);
+}
+
+.sidebar-empty-state {
+  padding: 16px;
+  font-size: 13px;
+}
+
 /* ── Empty state ── */
 .empty-state {
   display: flex;

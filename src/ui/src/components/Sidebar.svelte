@@ -54,7 +54,7 @@
 >
   <div class="sidebar-inner">
     <div class="brand">
-      <h1>RAG4Devs</h1>
+      <h1>AI Devs 4 RAG</h1>
       <div class="status-badge">
         <span class="status-dot" class:error={ui.statusError}></span>
         <span>

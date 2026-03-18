@@ -18,33 +18,72 @@
   function escapeHtml(s: string) {
     return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
+
+  let query = $state("");
+
+  const normalizedQuery = $derived(query.trim().toLowerCase());
+  const filteredSessions = $derived(
+    normalizedQuery
+      ? chat.sessions.filter((session) => {
+          const haystack = [
+            session.preview,
+            session.id,
+            session.model,
+            session.provider,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+          return haystack.includes(normalizedQuery);
+        })
+      : chat.sessions,
+  );
 </script>
 
 <section class="sessions-section">
   <div class="section-label">Sessions</div>
+  <input
+    class="sidebar-search"
+    type="search"
+    placeholder="Search sessions"
+    bind:value={query}
+    aria-label="Search sessions"
+    autocomplete="off"
+    spellcheck="false"
+  />
   <div class="sessions-list">
-    {#each chat.sessions as s (s.id)}
-      <button
-        class="session-item"
-        class:active={s.id === chat.sessionId}
-        onclick={() => onswitchsession(s.id)}
-      >
-        <div class="session-item-preview">
-          {s.preview ? s.preview.slice(0, 60) : "Empty session"}
-        </div>
-        <div class="session-item-meta">
-          {formatTime(s.updatedAt)} &middot; {s.messageCount} msgs
-        </div>
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <span
-          class="session-delete"
-          role="button"
-          tabindex="-1"
-          title="Delete session"
-          onclick={(e) => { e.stopPropagation(); ondeletesession(s.id); }}
-        >&#10005;</span>
-      </button>
-    {/each}
+    {#if filteredSessions.length === 0}
+      <div class="empty-state sidebar-empty-state">
+        {#if normalizedQuery}
+          No sessions match "{query.trim()}".
+        {:else}
+          No sessions yet.
+        {/if}
+      </div>
+    {:else}
+      {#each filteredSessions as s (s.id)}
+        <button
+          class="session-item"
+          class:active={s.id === chat.sessionId}
+          onclick={() => onswitchsession(s.id)}
+        >
+          <div class="session-item-preview">
+            {s.preview ? s.preview.slice(0, 60) : "Empty session"}
+          </div>
+          <div class="session-item-meta">
+            {formatTime(s.updatedAt)} &middot; {s.messageCount} msgs
+          </div>
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <span
+            class="session-delete"
+            role="button"
+            tabindex="-1"
+            title="Delete session"
+            onclick={(e) => { e.stopPropagation(); ondeletesession(s.id); }}
+          >&#10005;</span>
+        </button>
+      {/each}
+    {/if}
   </div>
 </section>
 

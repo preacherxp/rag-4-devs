@@ -21,6 +21,24 @@
     medium: "var(--amber)",
     hard: "var(--rose)",
   };
+
+  let query = $state("");
+
+  const normalizedQuery = $derived(query.trim().toLowerCase());
+  const filteredQuizzes = $derived(
+    normalizedQuery
+      ? quiz.list.filter((item) => {
+          const haystack = [
+            item.documentLabel,
+            item.difficulty,
+            item.id,
+          ]
+            .join(" ")
+            .toLowerCase();
+          return haystack.includes(normalizedQuery);
+        })
+      : quiz.list,
+  );
 </script>
 
 <section class="quiz-section">
@@ -28,32 +46,51 @@
   <button class="btn btn-secondary" style="width:100%;margin-bottom:4px" onclick={onnewquiz}>
     New quiz
   </button>
+  <input
+    class="sidebar-search"
+    type="search"
+    placeholder="Search quizzes"
+    bind:value={query}
+    aria-label="Search quizzes"
+    autocomplete="off"
+    spellcheck="false"
+  />
   <div class="quiz-list">
-    {#each quiz.list as q (q.id)}
-      <button
-        class="quiz-item"
-        class:active={q.id === quiz.activeId}
-        onclick={() => onselectquiz(q.id)}
-      >
-        <div class="quiz-item-label">{q.documentLabel}</div>
-        <div class="quiz-item-meta">
-          <span class="difficulty-badge" style="color:{difficultyColor[q.difficulty] ?? 'var(--text-3)'}">{q.difficulty}</span>
-          &middot; {q.answeredCount}/{q.numQuestions}
-          {#if q.score != null}
-            &middot; {q.score}/{q.numQuestions}
-          {/if}
-        </div>
-        <div class="quiz-item-date">{formatTime(q.createdAt)}</div>
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <span
-          class="quiz-delete"
-          role="button"
-          tabindex="-1"
-          title="Delete quiz"
-          onclick={(e) => { e.stopPropagation(); ondeletequiz(q.id); }}
-        >&#10005;</span>
-      </button>
-    {/each}
+    {#if filteredQuizzes.length === 0}
+      <div class="empty-state sidebar-empty-state">
+        {#if normalizedQuery}
+          No quizzes match "{query.trim()}".
+        {:else}
+          No quizzes yet.
+        {/if}
+      </div>
+    {:else}
+      {#each filteredQuizzes as q (q.id)}
+        <button
+          class="quiz-item"
+          class:active={q.id === quiz.activeId}
+          onclick={() => onselectquiz(q.id)}
+        >
+          <div class="quiz-item-label">{q.documentLabel}</div>
+          <div class="quiz-item-meta">
+            <span class="difficulty-badge" style="color:{difficultyColor[q.difficulty] ?? 'var(--text-3)'}">{q.difficulty}</span>
+            &middot; {q.answeredCount}/{q.numQuestions}
+            {#if q.score != null}
+              &middot; {q.score}/{q.numQuestions}
+            {/if}
+          </div>
+          <div class="quiz-item-date">{formatTime(q.createdAt)}</div>
+          <!-- svelte-ignore a11y_click_events_have_key_events -->
+          <span
+            class="quiz-delete"
+            role="button"
+            tabindex="-1"
+            title="Delete quiz"
+            onclick={(e) => { e.stopPropagation(); ondeletequiz(q.id); }}
+          >&#10005;</span>
+        </button>
+      {/each}
+    {/if}
   </div>
 </section>
 

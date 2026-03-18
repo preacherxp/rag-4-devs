@@ -1,11 +1,15 @@
-import { readFileSync, readdirSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { pool } from "../db/pool.js";
 import { config } from "../config.js";
 import { chunkMarkdown } from "./chunker.js";
 import { embedBatch } from "../lmstudio/index.js";
 import { getClientForProvider } from "../llm.js";
+import {
+  isPathWithinDir,
+  listMarkdownFiles,
+  resolveRagDir,
+} from "../documents/paths.js";
 
 function sha256(content: string): string {
   return createHash("sha256").update(content).digest("hex");
@@ -92,21 +96,36 @@ export async function indexAll(): Promise<{
   indexed: number;
   skipped: number;
 }> {
-  const ragDir = resolve(config.RAG_DIR);
-  console.log(ragDir);
-  const files = readdirSync(ragDir).filter((f) => f.endsWith(".md"));
+  const ragDir = resolveRagDir(config.RAG_DIR);
+  const files = listMarkdownFiles(ragDir);
 
   let indexed = 0;
   let skipped = 0;
 
-  for (const file of files) {
-    const filePath = resolve(ragDir, file);
+  for (const filePath of files) {
     const content = readFileSync(filePath, "utf-8");
     const wasIndexed = await indexFile(filePath, content);
     if (wasIndexed) indexed++;
     else skipped++;
   }
 
+  const documents = await pool.query<{ file_path: string }>(
+    "SELECT file_path FROM documents",
+  );
+  let removed = 0;
+
+  for (const row of documents.rows) {
+    const filePath = row.file_path;
+    if (!isPathWithinDir(filePath, ragDir) || existsSync(filePath)) {
+      continue;
+    }
+    await removeFile(filePath);
+    removed++;
+  }
+
+  if (removed > 0) {
+    console.log(`[ingest] Removed ${removed} stale document(s)`);
+  }
   console.log(`[ingest] Done: ${indexed} indexed, ${skipped} unchanged`);
   return { indexed, skipped };
 }

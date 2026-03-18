@@ -6,15 +6,40 @@
     onfocus: (id: number) => void;
     ondelete: (id: number) => void;
   } = $props();
+
+  let query = $state("");
+
+  const normalizedQuery = $derived(query.trim().toLowerCase());
+  const filteredDocs = $derived(
+    normalizedQuery
+      ? docs.list.filter((doc) => {
+          const haystack = `${doc.label} ${doc.filePath}`.toLowerCase();
+          return haystack.includes(normalizedQuery);
+        })
+      : docs.list,
+  );
 </script>
 
 <section class="documents-section">
   <div class="section-label">Documents</div>
+  <input
+    class="sidebar-search"
+    type="search"
+    placeholder="Search documents"
+    bind:value={query}
+    aria-label="Search documents"
+    autocomplete="off"
+    spellcheck="false"
+  />
   <div class="documents-list">
     {#if docs.list.length === 0}
-      <div class="empty-state" style="padding:16px;font-size:13px;">No indexed documents found.</div>
+      <div class="empty-state sidebar-empty-state">No indexed documents found.</div>
+    {:else if filteredDocs.length === 0}
+      <div class="empty-state sidebar-empty-state">
+        No documents match "{query.trim()}".
+      </div>
     {:else}
-      {#each docs.list as doc (doc.id)}
+      {#each filteredDocs as doc (doc.id)}
         <button
           class="doc-item"
           class:active={doc.id === docs.selectedId && doc.id !== docs.focusedId}

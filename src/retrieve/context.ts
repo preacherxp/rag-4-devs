@@ -1,10 +1,6 @@
-import { basename } from "node:path";
 import type { SearchResult } from "./search.js";
-
-/** Derive a short label from a file path: filename without extension. */
-export function sourceLabel(filePath: string): string {
-  return basename(filePath).replace(/\.[^.]+$/, "");
-}
+import { sourceLabel } from "../documents/paths.js";
+export { sourceLabel } from "../documents/paths.js";
 
 /** Format search results as XML-tagged context for the LLM prompt. */
 export function assembleContext(results: SearchResult[]): string {

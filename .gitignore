@@ -22,3 +22,5 @@ command-center/data/
 
 # Claude
 .claude/
+
+rag/*

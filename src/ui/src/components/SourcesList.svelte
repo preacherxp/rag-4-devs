@@ -8,8 +8,8 @@
   const deduped = $derived(() => {
     const seen = new Set<string>();
     return sources.filter((s) => {
-      if (seen.has(s.label)) return false;
-      seen.add(s.label);
+      if (seen.has(s.filePath)) return false;
+      seen.add(s.filePath);
       return true;
     });
   });

@@ -40,6 +40,7 @@ export interface Model {
 
 export interface ModelsPayload {
   defaultModel: string;
+  defaultProvider: string;
   providers: string[];
   models: Model[];
 }
@@ -48,6 +49,7 @@ export interface Source {
   label: string;
   heading?: string;
   similarity: number;
+  filePath: string;
 }
 
 export interface StatusPayload {

@@ -1,6 +1,6 @@
-# RAG
+# AI Devs 4 RAG
 
-Local RAG (Retrieval-Augmented Generation) tool with a Svelte UI, Hono API, and pgvector for vector search.
+AI Devs 4 RAG is a local retrieval-augmented generation tool with a Svelte UI, Hono API, and pgvector for vector search.
 
 ## Prerequisites
 
@@ -30,7 +30,7 @@ Local RAG (Retrieval-Augmented Generation) tool with a Svelte UI, Hono API, and 
 
    Edit `.env` and set your `OPENROUTER_API_KEY`. Other defaults work out of the box with the Docker setup (note: Docker exposes Postgres on port **5433**, so update `DATABASE_URL` accordingly if needed).
 
-4. **Add documents** to the `rag/` directory (configured via `RAG_DIR` in `.env`). Place your Markdown files there — they will be ingested and indexed for search.
+4. **Add documents** to the `rag/` directory (configured via `RAG_DIR` in `.env`). Markdown files anywhere under that directory are ingested recursively and indexed for search.
 
 5. **(Optional) Use LM Studio** instead of OpenRouter for local embeddings
 

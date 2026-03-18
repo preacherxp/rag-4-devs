@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { config, DEFAULT_CHAT_MODEL } from "../config.js";
+import { config, DEFAULT_CHAT_MODEL, DEFAULT_CHAT_PROVIDER } from "../config.js";
 import { pool } from "../db/pool.js";
 
 export type ChatRole = "user" | "assistant";
@@ -69,7 +69,7 @@ async function mapSession(row: SessionRow): Promise<ChatSession> {
 
 export async function createSession(
   model = DEFAULT_CHAT_MODEL,
-  provider = "lmstudio",
+  provider = DEFAULT_CHAT_PROVIDER,
 ): Promise<ChatSession> {
   const id = randomUUID();
   const result = await pool.query<SessionRow>(

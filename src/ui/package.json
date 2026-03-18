@@ -1,6 +1,16 @@
 {
-  "name": "rag-ui",
-  "private": true,
+  "name": "ai-devs-4-builders-rag-ui",
+  "version": "1.0.0",
+  "license": "MIT",
+  "author": "Michał Hachuła <michal.hachula@purecode.sh>",
+  "description": "AI Devs 4 RAG UI",
+  "keywords": [
+    "rag",
+    "ai-devs",
+    "ai-devs-4",
+    "ai-devs-4-builders",
+    "ai-devs-4-builders-rag"
+  ],
   "type": "module",
   "scripts": {
     "dev": "vite",

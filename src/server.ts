@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { config } from "./config.js";
+import { config, DEFAULT_CHAT_MODEL, DEFAULT_CHAT_PROVIDER } from "./config.js";
 import {
   appendMessage,
   createSession,
@@ -32,8 +32,6 @@ import {
   completeQuiz,
 } from "./quiz/store.js";
 import { generateQuiz } from "./quiz/generate.js";
-import { DEFAULT_CHAT_MODEL } from "./config.js";
-
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export const app = new Hono();
@@ -114,7 +112,7 @@ app.post("/api/chat/sessions", async (c) => {
     .json<{ model?: string; provider?: string }>()
     .catch(() => ({}) as { model?: string; provider?: string });
   const model = body.model?.trim();
-  const provider = body.provider?.trim() || "lmstudio";
+  const provider = body.provider?.trim() || DEFAULT_CHAT_PROVIDER;
   const session = await createSession(model, provider);
   return c.json(session, 201);
 });
@@ -174,14 +172,14 @@ app.get("/api/models", async (c) => {
   // Ensure default model is present
   if (
     !allModels.some(
-      (m) => m.id === DEFAULT_CHAT_MODEL && m.provider === "lmstudio",
+      (m) => m.id === DEFAULT_CHAT_MODEL && m.provider === DEFAULT_CHAT_PROVIDER,
     )
   ) {
     allModels.push({
       id: DEFAULT_CHAT_MODEL,
       object: "model",
       ownedBy: "default",
-      provider: "lmstudio",
+      provider: DEFAULT_CHAT_PROVIDER,
     });
   }
 
@@ -208,6 +206,7 @@ app.get("/api/models", async (c) => {
 
   return c.json({
     defaultModel: DEFAULT_CHAT_MODEL,
+    defaultProvider: DEFAULT_CHAT_PROVIDER,
     providers,
     models: deduped.sort(
       (a, b) =>

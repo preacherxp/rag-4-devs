@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { pool } from "../db/pool.js";
+import { sourceLabel } from "../documents/paths.js";
 
 export type QuizDifficulty = "easy" | "medium" | "hard";
 export type AnswerLetter = "A" | "B" | "C" | "D";
@@ -113,7 +114,7 @@ export async function getQuiz(id: string): Promise<Quiz | null> {
   );
 
   const filePath = row.file_path as string;
-  const label = filePath.replace(/^.*\//, "").replace(/\.[^.]+$/, "");
+  const label = sourceLabel(filePath);
 
   return {
     id: row.id as string,
@@ -154,7 +155,7 @@ export async function listQuizzes(): Promise<QuizSummary[]> {
 
   return result.rows.map((row) => {
     const filePath = row.file_path as string;
-    const label = filePath.replace(/^.*\//, "").replace(/\.[^.]+$/, "");
+    const label = sourceLabel(filePath);
     return {
       id: row.id as string,
       documentId: row.document_id as number,

@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { pool } from "../db/pool.js";
-import { sourceLabel } from "../retrieve/context.js";
+import { sourceLabel } from "./paths.js";
 
 export type DocumentListItem = {
   id: number;

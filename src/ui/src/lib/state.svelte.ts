@@ -3,9 +3,10 @@ import type { SessionSummary, Message, Document, Model, QuizSummary, Quiz } from
 export const chat = $state({
   sessionId: "",
   model: "",
-  provider: "lmstudio",
+  provider: "openrouter",
   defaultModel: "",
-  providers: ["lmstudio"] as string[],
+  defaultProvider: "openrouter",
+  providers: ["openrouter"] as string[],
   sessions: [] as SessionSummary[],
   messages: [] as Message[],
   models: [] as Model[],

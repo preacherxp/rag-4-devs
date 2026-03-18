@@ -26,11 +26,15 @@
 
     if (chat.model && !keys.has(currentKey)) {
       items.unshift({ value: currentKey, label: chat.model, provider: chat.provider });
-    } else if (!chat.model && chat.defaultModel && !keys.has(`lmstudio:${chat.defaultModel}`)) {
+    } else if (
+      !chat.model &&
+      chat.defaultModel &&
+      !keys.has(`${chat.defaultProvider}:${chat.defaultModel}`)
+    ) {
       items.unshift({
-        value: `lmstudio:${chat.defaultModel}`,
+        value: `${chat.defaultProvider}:${chat.defaultModel}`,
         label: chat.defaultModel,
-        provider: "lmstudio",
+        provider: chat.defaultProvider,
       });
     }
 
@@ -47,8 +51,10 @@
 
   const hasMultipleProviders = $derived(() => Object.keys(grouped()).length > 1);
 
-  const currentValue = $derived(
-    `${chat.provider}:${chat.model}` || `lmstudio:${chat.defaultModel}`,
+  const currentValue = $derived.by(() =>
+    chat.model
+      ? `${chat.provider}:${chat.model}`
+      : `${chat.defaultProvider}:${chat.defaultModel}`,
   );
 </script>
 

@@ -48,30 +48,75 @@
 
     // Quiz routes
     if (hash === "quiz/new") {
-      return { view: "quiz-setup", sessionId: null, documentId: null, fullscreen: false, quizId: null };
+      return {
+        view: "quiz-setup",
+        sessionId: null,
+        documentId: null,
+        fullscreen: false,
+        quizId: null,
+      };
     }
     const quizResults = hash.match(/^quiz\/([^/]+)\/results$/);
     if (quizResults) {
-      return { view: "quiz-results", sessionId: null, documentId: null, fullscreen: false, quizId: quizResults[1]! };
+      return {
+        view: "quiz-results",
+        sessionId: null,
+        documentId: null,
+        fullscreen: false,
+        quizId: quizResults[1]!,
+      };
     }
     const quizMatch = hash.match(/^quiz\/([^/]+)$/);
     if (quizMatch) {
-      return { view: "quiz", sessionId: null, documentId: null, fullscreen: false, quizId: quizMatch[1]! };
+      return {
+        view: "quiz",
+        sessionId: null,
+        documentId: null,
+        fullscreen: false,
+        quizId: quizMatch[1]!,
+      };
     }
 
     // #/session/{id}/document/{docId}(/full)
     const full = hash.match(/^session\/([^/]+)\/document\/([^/]+)(\/full)?$/);
-    if (full) return { view: "chat", sessionId: full[1], documentId: Number(full[2]), fullscreen: !!full[3], quizId: null };
+    if (full)
+      return {
+        view: "chat",
+        sessionId: full[1],
+        documentId: Number(full[2]),
+        fullscreen: !!full[3],
+        quizId: null,
+      };
 
     // #/session/{id}
     const sess = hash.match(/^session\/([^/]+)$/);
-    if (sess) return { view: "chat", sessionId: sess[1], documentId: null, fullscreen: false, quizId: null };
+    if (sess)
+      return {
+        view: "chat",
+        sessionId: sess[1],
+        documentId: null,
+        fullscreen: false,
+        quizId: null,
+      };
 
     // Legacy: #/document/{id}(/full)
     const doc = hash.match(/^document\/([^/]+)(\/full)?$/);
-    if (doc) return { view: "chat", sessionId: null, documentId: Number(doc[1]), fullscreen: !!doc[2], quizId: null };
+    if (doc)
+      return {
+        view: "chat",
+        sessionId: null,
+        documentId: Number(doc[1]),
+        fullscreen: !!doc[2],
+        quizId: null,
+      };
 
-    return { view: "chat", sessionId: null, documentId: null, fullscreen: false, quizId: null };
+    return {
+      view: "chat",
+      sessionId: null,
+      documentId: null,
+      fullscreen: false,
+      quizId: null,
+    };
   }
 
   function buildHash(
@@ -87,7 +132,11 @@
     return h;
   }
 
-  function pushHash(sessionId: string | null, documentId: number | null, fullscreen: boolean) {
+  function pushHash(
+    sessionId: string | null,
+    documentId: number | null,
+    fullscreen: boolean,
+  ) {
     history.pushState(null, "", buildHash(sessionId, documentId, fullscreen));
   }
 
@@ -107,13 +156,19 @@
           quiz.activeQuiz = await fetchQuiz(route.quizId);
           quiz.activeId = route.quizId;
           quiz.currentQuestionIndex = 0;
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
       return;
     }
 
     // Handle session navigation
-    if (route.sessionId && route.sessionId !== chat.sessionId && !chat.isStreaming) {
+    if (
+      route.sessionId &&
+      route.sessionId !== chat.sessionId &&
+      !chat.isStreaming
+    ) {
       await handleSwitchSession(route.sessionId, false);
     }
 
@@ -133,7 +188,7 @@
 
   function parseModelValue(value: string) {
     const idx = value.indexOf(":");
-    if (idx === -1) return { provider: "lmstudio", model: value };
+    if (idx === -1) return { provider: chat.defaultProvider, model: value };
     return { provider: value.slice(0, idx), model: value.slice(idx + 1) };
   }
 
@@ -148,9 +203,13 @@
     chat.provider = selected.provider;
 
     try {
-      const session = await patchSessionModel(chat.sessionId, selected.model, selected.provider);
+      const session = await patchSessionModel(
+        chat.sessionId,
+        selected.model,
+        selected.provider,
+      );
       chat.model = session.model;
-      chat.provider = session.provider || "lmstudio";
+      chat.provider = session.provider || chat.defaultProvider;
     } catch (e) {
       chat.model = prev.model;
       chat.provider = prev.provider;
@@ -165,7 +224,7 @@
     const session = await createSession(selected.model, selected.provider);
     chat.sessionId = session.id;
     chat.model = session.model;
-    chat.provider = session.provider || "lmstudio";
+    chat.provider = session.provider || chat.defaultProvider;
     chat.messages = session.messages || [];
     chat.sessions = await fetchSessions();
     pushHash(session.id, null, false);
@@ -178,9 +237,10 @@
       const session = await fetchSession(id);
       chat.sessionId = session.id;
       chat.model = session.model;
-      chat.provider = session.provider || "lmstudio";
+      chat.provider = session.provider || chat.defaultProvider;
       chat.messages = session.messages || [];
-      if (updateHash) pushHash(session.id, docs.selectedId, ui.previewFullscreen);
+      if (updateHash)
+        pushHash(session.id, docs.selectedId, ui.previewFullscreen);
     } catch {
       /* ignore */
     }
@@ -259,11 +319,17 @@
         history.pushState(null, "", "#/");
         await handleRoute();
       }
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
 
   function handleQuizCreated(id: string) {
-    fetchQuizzes().then((list) => { quiz.list = list; }).catch(() => {});
+    fetchQuizzes()
+      .then((list) => {
+        quiz.list = list;
+      })
+      .catch(() => {});
     history.pushState(null, "", `#/quiz/${id}`);
     handleRoute();
   }
@@ -335,7 +401,7 @@
       try {
         const session = await fetchSession(chat.sessionId);
         chat.model = session.model;
-        chat.provider = session.provider || "lmstudio";
+        chat.provider = session.provider || chat.defaultProvider;
         chat.sessions = await fetchSessions();
       } catch {
         /* ignore */
@@ -369,15 +435,21 @@
 
   async function boot() {
     try {
-      const [status, modelsPayload, sessions, latestSession, documents, quizzes] =
-        await Promise.all([
-          fetchStatus().catch(() => null),
-          fetchModels().catch(() => null),
-          fetchSessions().catch(() => []),
-          fetchLatestSession(),
-          fetchDocuments().catch(() => []),
-          fetchQuizzes().catch(() => []),
-        ]);
+      const [
+        status,
+        modelsPayload,
+        sessions,
+        latestSession,
+        documents,
+        quizzes,
+      ] = await Promise.all([
+        fetchStatus().catch(() => null),
+        fetchModels().catch(() => null),
+        fetchSessions().catch(() => []),
+        fetchLatestSession(),
+        fetchDocuments().catch(() => []),
+        fetchQuizzes().catch(() => []),
+      ]);
 
       if (status) {
         ui.status = status;
@@ -389,6 +461,7 @@
       if (modelsPayload) {
         chat.models = modelsPayload.models;
         chat.defaultModel = modelsPayload.defaultModel;
+        chat.defaultProvider = modelsPayload.defaultProvider;
         chat.providers = modelsPayload.providers;
       }
 
@@ -399,7 +472,7 @@
       // Set active session
       chat.sessionId = latestSession.id;
       chat.model = latestSession.model;
-      chat.provider = latestSession.provider || "lmstudio";
+      chat.provider = latestSession.provider || chat.defaultProvider;
       chat.messages = latestSession.messages || [];
 
       // Handle initial route or set session in URL
@@ -432,8 +505,7 @@
   <main class="main-content">
     <div class="chat-header">
       <div>
-        <h2>RAG4Devs</h2>
-        <div class="chat-header-sub">AI Devs 4 — Knowledge base chat</div>
+        <h2>AI Devs 4 RAG</h2>
       </div>
     </div>
 
@@ -448,7 +520,10 @@
   </main>
 </div>
 
-<PreviewPanel onnavchange={(docId, fullscreen) => pushHash(chat.sessionId || null, docId, fullscreen)} />
+<PreviewPanel
+  onnavchange={(docId, fullscreen) =>
+    pushHash(chat.sessionId || null, docId, fullscreen)}
+/>
 <Lightbox />
 
 <style>
@@ -477,7 +552,7 @@
   }
 
   .chat-header h2 {
-    font-family: 'Instrument Serif', serif;
+    font-family: "Instrument Serif", serif;
     font-size: 20px;
     font-weight: 400;
     color: var(--text);
