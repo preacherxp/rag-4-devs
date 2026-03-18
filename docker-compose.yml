@@ -3,9 +3,9 @@ services:
     image: pgvector/pgvector:pg17
     container_name: ai-devs-rag-pgvector
     environment:
-      POSTGRES_USER: rag
-      POSTGRES_PASSWORD: rag
-      POSTGRES_DB: rag
+      POSTGRES_USER: mateusz
+      POSTGRES_PASSWORD: adam
+      POSTGRES_DB: jakub
     ports:
       - "5433:5432"
     volumes:
