@@ -35,7 +35,10 @@
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
         </svg>
       </div>
-      Start a new conversation. Your messages will be saved and restored automatically.
+      <p class="empty-title">Your research copilot</p>
+      <p class="empty-copy">
+        Ask questions grounded in your indexed documents. Sessions persist automatically—pick up where you left off anytime.
+      </p>
     </div>
   {:else}
     {#each chat.messages as msg (msg.sequence)}
@@ -54,7 +57,7 @@
   .messages {
     flex: 1;
     overflow-y: auto;
-    padding: 24px 32px;
+    padding: 24px 32px 8px;
     display: flex;
     flex-direction: column;
     gap: 16px;
@@ -63,7 +66,26 @@
     scrollbar-color: var(--surface-3) transparent;
   }
 
+  .empty-title {
+    font-family: "Instrument Serif", serif;
+    font-size: 1.5rem;
+    font-weight: 400;
+    color: var(--text);
+    letter-spacing: -0.02em;
+    margin: 0;
+  }
+
+  .empty-copy {
+    max-width: 34rem;
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.65;
+    color: var(--text-3);
+  }
+
   @media (max-width: 768px) {
-    .messages { padding: 16px; }
+    .messages {
+      padding: 16px 16px 8px;
+    }
   }
 </style>

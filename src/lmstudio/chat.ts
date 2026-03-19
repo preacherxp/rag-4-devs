@@ -57,6 +57,7 @@ export async function* streamChat(
   const res = await fetch(`${client.baseUrl}/chat/completions`, {
     method: "POST",
     headers: client.headers,
+    ...(options.signal !== undefined ? { signal: options.signal } : {}),
     body: JSON.stringify({
       model: options.model,
       messages: options.messages,

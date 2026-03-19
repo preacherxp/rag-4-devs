@@ -36,7 +36,11 @@ export async function structuredChat<T extends z.ZodType>(
 
 export async function structuredStreamChat<T extends z.ZodType>(
   client: LmStudioClient,
-  options: StructuredChatOptions<T> & { onToken?: (token: string) => void },
+  options: StructuredChatOptions<T> & {
+    onToken?: (token: string) => void;
+    signal?: AbortSignal;
+    onStreamComplete?: () => void | Promise<void>;
+  },
 ): Promise<z.infer<T>> {
   let buffer = "";
   for await (const token of streamChat(client, {
@@ -52,11 +56,15 @@ export async function structuredStreamChat<T extends z.ZodType>(
     },
     temperature: options.temperature,
     maxTokens: options.maxTokens,
+    signal: options.signal,
   })) {
     options.onToken?.(token);
     buffer += token;
   }
 
+  if (options.onStreamComplete) {
+    await Promise.resolve(options.onStreamComplete());
+  }
   const parsed = parseJsonWithRepair(buffer);
   return options.schema.parse(parsed) as z.infer<T>;
 }

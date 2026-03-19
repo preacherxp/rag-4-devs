@@ -45,6 +45,7 @@ export async function* ragStream(
   historyBeforeSequence?: number,
   provider = DEFAULT_CHAT_PROVIDER,
   focusDocumentId?: number,
+  signal?: AbortSignal,
 ): AsyncGenerator<{ type: "token"; data: string } | { type: "sources"; data: SourceMeta[] }> {
   const results = await searchChunks(query, 5, 0.3, focusDocumentId);
   const context = assembleContext(results);
@@ -61,7 +62,13 @@ export async function* ragStream(
   ];
 
   const client = getClientForProvider(provider);
-  for await (const token of streamChat(client, { model, messages, temperature: 0.3, maxTokens: 4096 })) {
+  for await (const token of streamChat(client, {
+    model,
+    messages,
+    temperature: 0.3,
+    maxTokens: 4096,
+    signal,
+  })) {
     yield { type: "token", data: token };
   }
 

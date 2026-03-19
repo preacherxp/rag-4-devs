@@ -1,6 +1,7 @@
 <script lang="ts">
   import { docs, quiz } from "../lib/state.svelte";
-  import { createQuiz } from "../lib/api";
+  import { streamCreateQuiz } from "../lib/api";
+  import type { QuizGenProgress } from "../lib/types";
   import { parseModelValue } from "../lib/utils";
   import ModelSelector from "./ModelSelector.svelte";
 
@@ -13,6 +14,14 @@
   let numQuestions = $state(10);
   let difficulty = $state<"easy" | "medium" | "hard">("medium");
   let error = $state("");
+  let generationCancelled = $state(false);
+  let generateAbort: AbortController | null = null;
+
+  function isAbortError(e: unknown): boolean {
+    return (
+      e instanceof DOMException && e.name === "AbortError"
+    ) || (e instanceof Error && e.name === "AbortError");
+  }
 
   function handleQuizModelChange(value: string) {
     if (!value) return;
@@ -21,24 +30,68 @@
     quiz.provider = selected.provider;
   }
 
+  function progressDetail(p: QuizGenProgress): string {
+    if (p.phase === "document") {
+      const kb = (p.charCount / 1024).toFixed(1);
+      return `${p.chunkCount} chunk${p.chunkCount === 1 ? "" : "s"} · ~${kb} KB context`;
+    }
+    if (p.phase === "generating") {
+      return `${p.charsReceived.toLocaleString()} chars from model`;
+    }
+    return "";
+  }
+
   async function handleGenerate() {
     if (!selectedDocId) return;
+    generationCancelled = false;
     quiz.isGenerating = true;
+    quiz.generationProgress = null;
     error = "";
+    generateAbort = new AbortController();
     try {
-      const created = await createQuiz({
-        documentId: selectedDocId,
-        numQuestions,
-        difficulty,
-        model: quiz.model || quiz.defaultModel,
-        provider: quiz.provider || quiz.defaultProvider,
-      });
+      let created: { id: string } | null = null;
+      for await (const ev of streamCreateQuiz(
+        {
+          documentId: selectedDocId,
+          numQuestions,
+          difficulty,
+          model: quiz.model || quiz.defaultModel,
+          provider: quiz.provider || quiz.defaultProvider,
+        },
+        { signal: generateAbort.signal },
+      )) {
+        if (ev.type === "progress") {
+          quiz.generationProgress = ev.data;
+        } else if (ev.type === "quiz") {
+          created = ev.data;
+        } else if (ev.type === "error") {
+          throw new Error(ev.data.replace(/^\[ERROR\]\s*/, "").trim());
+        }
+      }
+      if (!created) throw new Error("Quiz stream ended without a result");
       onquizcreated(created.id);
     } catch (e) {
+      if (isAbortError(e)) {
+        generationCancelled = true;
+        error = "";
+        return;
+      }
       error = e instanceof Error ? e.message : "Failed to generate quiz";
     } finally {
+      generateAbort = null;
       quiz.isGenerating = false;
+      quiz.generationProgress = null;
     }
+  }
+
+  function handleCancelGeneration() {
+    error = "";
+    generateAbort?.abort();
+  }
+
+  function handleClose() {
+    generateAbort?.abort();
+    onclose();
   }
 </script>
 
@@ -51,7 +104,7 @@
     <button
       type="button"
       class="btn btn-secondary quiz-setup-close"
-      onclick={() => onclose()}
+      onclick={handleClose}
     >Close</button>
   </div>
 
@@ -115,17 +168,55 @@
     <div class="error-msg">{error}</div>
   {/if}
 
-  <button
-    class="btn btn-primary generate-btn"
-    disabled={!selectedDocId || quiz.isGenerating}
-    onclick={handleGenerate}
-  >
+  <div class="generate-row">
+    <button
+      type="button"
+      class="btn btn-primary generate-btn"
+      disabled={!selectedDocId || quiz.isGenerating}
+      onclick={handleGenerate}
+    >
+      {#if quiz.isGenerating}
+        Generating…
+      {:else}
+        Generate Quiz
+      {/if}
+    </button>
     {#if quiz.isGenerating}
-      Generating...
-    {:else}
-      Generate Quiz
+      <button
+        type="button"
+        class="btn btn-secondary cancel-gen-btn"
+        onclick={handleCancelGeneration}
+      >Cancel</button>
     {/if}
-  </button>
+  </div>
+
+  {#if generationCancelled && !quiz.isGenerating}
+    <p class="cancel-msg">Generation cancelled.</p>
+  {/if}
+
+  {#if quiz.isGenerating}
+    <div class="gen-progress" aria-live="polite">
+      {#if quiz.generationProgress}
+        {@const p = quiz.generationProgress}
+        <div class="gen-progress-phase">
+          {#if p.phase === "document"}
+            Loading document context
+          {:else if p.phase === "generating"}
+            Generating questions
+          {:else if p.phase === "parsing"}
+            Validating quiz structure
+          {:else if p.phase === "saving"}
+            Saving quiz
+          {/if}
+        </div>
+        {#if progressDetail(p)}
+          <div class="gen-progress-detail">{progressDetail(p)}</div>
+        {/if}
+      {:else}
+        <div class="gen-progress-phase">Connecting…</div>
+      {/if}
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -214,10 +305,50 @@
     margin-bottom: 12px;
   }
 
+  .generate-row {
+    display: flex;
+    gap: 10px;
+    align-items: stretch;
+    margin-top: 8px;
+  }
+
   .generate-btn {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     padding: 12px;
     font-size: 14px;
-    margin-top: 8px;
+  }
+
+  .cancel-gen-btn {
+    flex-shrink: 0;
+    padding: 12px 18px;
+    font-size: 14px;
+  }
+
+  .cancel-msg {
+    margin: 10px 0 0;
+    font-size: 13px;
+    color: var(--text-3);
+  }
+
+  .gen-progress {
+    margin-top: 16px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    background: var(--surface-2);
+    border: 1px solid var(--border-subtle);
+  }
+
+  .gen-progress-phase {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .gen-progress-detail {
+    margin-top: 4px;
+    font-size: 12px;
+    color: var(--text-3);
+    font-variant-numeric: tabular-nums;
   }
 </style>

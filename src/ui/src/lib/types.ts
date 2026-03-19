@@ -102,3 +102,15 @@ export interface QuizSummary {
   createdAt: string;
   answeredCount: number;
 }
+
+export type QuizGenProgress =
+  | { phase: "document"; chunkCount: number; charCount: number }
+  | { phase: "generating"; charsReceived: number }
+  | { phase: "parsing" }
+  | { phase: "saving" };
+
+export type QuizGenStreamEvent =
+  | { type: "progress"; data: QuizGenProgress }
+  | { type: "quiz"; data: Quiz }
+  | { type: "done" }
+  | { type: "error"; data: string };

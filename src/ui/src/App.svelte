@@ -31,6 +31,7 @@
   let streamingSources = $state<Source[]>([]);
   let showTyping = $state(false);
   let inputArea: InputArea | undefined = $state();
+  let chatAbort: AbortController | null = null;
 
   type View = "chat" | "quiz-setup" | "quiz" | "quiz-results";
 
@@ -326,11 +327,8 @@
     quiz.activeQuiz = null;
     quiz.currentQuestionIndex = 0;
     quiz.isGenerating = false;
-    history.pushState(
-      null,
-      "",
-      buildHash(chat.sessionId || null, null, false),
-    );
+    quiz.generationProgress = null;
+    history.pushState(null, "", buildHash(chat.sessionId || null, null, false));
     handleRoute();
   }
 
@@ -360,6 +358,8 @@
     ];
 
     chat.isStreaming = true;
+    chatAbort = new AbortController();
+    const { signal } = chatAbort;
     showTyping = true;
     streamingContent = "";
     streamingSources = [];
@@ -369,6 +369,7 @@
         chat.sessionId,
         text,
         docs.focusedId ?? undefined,
+        { signal },
       )) {
         if (event.type === "token") {
           if (showTyping) {
@@ -420,23 +421,39 @@
         /* ignore */
       }
     } catch (e) {
-      showTyping = false;
-      streamingContent = "";
-      const msg = e instanceof Error ? e.message : "Unknown error";
-      chat.messages = [
-        ...chat.messages,
-        {
-          role: "assistant" as const,
-          content: `Connection error: ${msg}`,
-          model: chat.model,
-          sequence: chat.messages.length + 1,
-          createdAt: new Date().toISOString(),
-        },
-      ];
+      const aborted =
+        (e instanceof Error && e.name === "AbortError") ||
+        (typeof DOMException !== "undefined" &&
+          e instanceof DOMException &&
+          e.name === "AbortError");
+      if (aborted) {
+        showTyping = false;
+        streamingContent = "";
+        streamingSources = [];
+      } else {
+        showTyping = false;
+        streamingContent = "";
+        const msg = e instanceof Error ? e.message : "Unknown error";
+        chat.messages = [
+          ...chat.messages,
+          {
+            role: "assistant" as const,
+            content: `Connection error: ${msg}`,
+            model: chat.model,
+            sequence: chat.messages.length + 1,
+            createdAt: new Date().toISOString(),
+          },
+        ];
+      }
+    } finally {
+      chat.isStreaming = false;
+      chatAbort = null;
+      inputArea?.focus();
     }
+  }
 
-    chat.isStreaming = false;
-    inputArea?.focus();
+  function handleCancelChat() {
+    chatAbort?.abort();
   }
 
   // ── Boot ──
@@ -521,11 +538,12 @@
   />
 
   <main class="main-content">
-    <div class="chat-header">
-      <div>
+    <header class="chat-header">
+      <div class="chat-header-inner">
         <h2>AI Devs 4 RAG</h2>
+        <p class="chat-header-sub">Answers from your indexed docs</p>
       </div>
-    </div>
+    </header>
 
     {#if currentView === "quiz-setup"}
       <QuizSetup onquizcreated={handleQuizCreated} onclose={handleCloseQuiz} />
@@ -533,7 +551,11 @@
       <QuizView onnewquiz={handleNewQuiz} onclose={handleCloseQuiz} />
     {:else}
       <ChatArea {streamingContent} {streamingSources} {showTyping} />
-      <InputArea bind:this={inputArea} onsend={handleSend} />
+      <InputArea
+        bind:this={inputArea}
+        onsend={handleSend}
+        oncancel={handleCancelChat}
+      />
     {/if}
   </main>
 </div>
@@ -561,24 +583,40 @@
   }
 
   .chat-header {
-    padding: 14px 24px;
-    border-bottom: 1px solid var(--border-subtle);
+    padding: 12px 24px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: var(--ink);
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.02) 0%,
+      transparent 100%
+    ),
+      var(--ink);
+    flex-shrink: 0;
+  }
+
+  .chat-header-inner {
+    min-width: 0;
   }
 
   .chat-header h2 {
     font-family: "Instrument Serif", serif;
-    font-size: 20px;
+    font-size: 1.25rem;
     font-weight: 400;
     color: var(--text);
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    margin: 0;
   }
 
   .chat-header-sub {
     font-size: 12px;
     color: var(--text-3);
+    margin: 4px 0 0;
+    line-height: 1.35;
+    letter-spacing: 0.01em;
   }
 
   @media (max-width: 768px) {

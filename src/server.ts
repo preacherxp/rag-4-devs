@@ -31,7 +31,7 @@ import {
   restartQuiz,
   completeQuiz,
 } from "./quiz/store.js";
-import { generateQuiz } from "./quiz/generate.js";
+import { generateQuiz, type QuizGenProgress } from "./quiz/generate.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export const app = new Hono();
@@ -63,6 +63,8 @@ app.post("/api/chat", async (c) => {
 
   const userMessage = await appendMessage(sessionId, "user", query, session.model);
 
+  const upstreamSignal = c.req.raw.signal;
+
   return streamSSE(c, async (stream) => {
     let assistantText = "";
     try {
@@ -73,6 +75,7 @@ app.post("/api/chat", async (c) => {
         userMessage.sequence,
         session.provider,
         focusDocumentId,
+        upstreamSignal,
       )) {
         if (event.type === "token") {
           assistantText += event.data;
@@ -91,8 +94,15 @@ app.post("/api/chat", async (c) => {
 
       await stream.writeSSE({ data: "[DONE]" });
     } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        return;
+      }
       const msg = err instanceof Error ? err.message : "Unknown error";
-      await stream.writeSSE({ data: `[ERROR] ${msg}` });
+      try {
+        await stream.writeSSE({ data: `[ERROR] ${msg}` });
+      } catch {
+        /* client may have disconnected */
+      }
     }
   });
 });
@@ -315,6 +325,78 @@ app.post("/api/quizzes", async (c) => {
     const msg = err instanceof Error ? err.message : "Quiz generation failed";
     return c.json({ error: msg }, 500);
   }
+});
+
+app.post("/api/quizzes/stream", async (c) => {
+  const body = await c.req.json<{
+    documentId?: number;
+    numQuestions?: number;
+    difficulty?: string;
+    model?: string;
+    provider?: string;
+  }>();
+
+  const documentId = body.documentId;
+  if (typeof documentId !== "number") {
+    return c.json({ error: "documentId is required" }, 400);
+  }
+
+  const numQuestions = body.numQuestions ?? 10;
+  if (![5, 10, 20].includes(numQuestions)) {
+    return c.json({ error: "numQuestions must be 5, 10, or 20" }, 400);
+  }
+
+  const difficulty = body.difficulty ?? "medium";
+  if (!["easy", "medium", "hard"].includes(difficulty)) {
+    return c.json({ error: "difficulty must be easy, medium, or hard" }, 400);
+  }
+
+  const model = body.model?.trim() || undefined;
+  const provider = body.provider?.trim() || undefined;
+  const upstreamSignal = c.req.raw.signal;
+
+  return streamSSE(c, async (stream) => {
+    const writeProgress = async (p: QuizGenProgress) => {
+      await stream.writeSSE({
+        event: "progress",
+        data: JSON.stringify(p),
+      });
+    };
+
+    try {
+      const generated = await generateQuiz(
+        documentId,
+        numQuestions,
+        difficulty as "easy" | "medium" | "hard",
+        model,
+        provider,
+        { onProgress: writeProgress, signal: upstreamSignal },
+      );
+      await writeProgress({ phase: "saving" });
+      const quiz = await createQuizInDb(
+        documentId,
+        difficulty as "easy" | "medium" | "hard",
+        generated.model,
+        generated.provider,
+        generated.questions,
+      );
+      await stream.writeSSE({
+        event: "quiz",
+        data: JSON.stringify(quiz),
+      });
+      await stream.writeSSE({ data: "[DONE]" });
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        return;
+      }
+      const msg = err instanceof Error ? err.message : "Quiz generation failed";
+      try {
+        await stream.writeSSE({ data: `[ERROR] ${msg}` });
+      } catch {
+        /* disconnected */
+      }
+    }
+  });
 });
 
 app.get("/api/quizzes", async (c) => {

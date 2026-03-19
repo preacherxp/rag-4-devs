@@ -1,4 +1,12 @@
-import type { SessionSummary, Message, Document, Model, QuizSummary, Quiz } from "./types";
+import type {
+  SessionSummary,
+  Message,
+  Document,
+  Model,
+  QuizSummary,
+  Quiz,
+  QuizGenProgress,
+} from "./types";
 
 export const chat = $state({
   sessionId: "",
@@ -35,6 +43,7 @@ export const quiz = $state({
   activeQuiz: null as Quiz | null,
   currentQuestionIndex: 0,
   isGenerating: false,
+  generationProgress: null as QuizGenProgress | null,
   model: "",
   provider: "openrouter",
   defaultModel: "",

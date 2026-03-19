@@ -8,6 +8,7 @@ import type {
   SSEEvent,
   Quiz,
   QuizSummary,
+  QuizGenStreamEvent,
 } from "./types";
 
 async function json<T>(url: string, init?: RequestInit): Promise<T> {
@@ -99,6 +100,87 @@ export function createQuiz(opts: {
   });
 }
 
+export async function* streamCreateQuiz(
+  opts: {
+    documentId: number;
+    numQuestions: number;
+    difficulty: string;
+    model: string;
+    provider: string;
+  },
+  options?: { signal?: AbortSignal },
+): AsyncGenerator<QuizGenStreamEvent> {
+  const res = await fetch("/api/quizzes/stream", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(opts),
+    ...(options?.signal !== undefined ? { signal: options.signal } : {}),
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({ error: "Request failed" }));
+    throw new Error(body.error || `HTTP ${res.status}`);
+  }
+
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let currentEvent = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+
+      if (trimmed.startsWith("event: ")) {
+        currentEvent = trimmed.slice(7);
+        continue;
+      }
+
+      if (!trimmed.startsWith("data: ")) continue;
+      const data = trimmed.slice(6);
+
+      if (currentEvent === "progress") {
+        currentEvent = "";
+        try {
+          yield { type: "progress", data: JSON.parse(data) };
+        } catch {
+          /* skip */
+        }
+        continue;
+      }
+
+      if (currentEvent === "quiz") {
+        currentEvent = "";
+        try {
+          yield { type: "quiz", data: JSON.parse(data) };
+        } catch {
+          /* skip */
+        }
+        continue;
+      }
+
+      currentEvent = "";
+
+      if (data === "[DONE]") {
+        yield { type: "done" };
+        continue;
+      }
+
+      if (data.startsWith("[ERROR]")) {
+        yield { type: "error", data };
+        continue;
+      }
+    }
+  }
+}
+
 export function deleteQuizApi(id: string): Promise<{ ok: boolean }> {
   return json(`/api/quizzes/${id}`, { method: "DELETE" });
 }
@@ -127,6 +209,7 @@ export async function* streamChat(
   sessionId: string,
   message: string,
   focusDocumentId?: number,
+  opts?: { signal?: AbortSignal },
 ): AsyncGenerator<SSEEvent> {
   const body: Record<string, unknown> = { sessionId, message };
   if (focusDocumentId != null) body.focusDocumentId = focusDocumentId;
@@ -135,6 +218,7 @@ export async function* streamChat(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
+    ...(opts?.signal !== undefined ? { signal: opts.signal } : {}),
   });
 
   if (!res.ok) {

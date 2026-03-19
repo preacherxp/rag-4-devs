@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { structuredChat } from "../lmstudio/index.js";
+import { structuredChat, structuredStreamChat } from "../lmstudio/index.js";
 import { getClientForProvider } from "../llm.js";
 import { pool } from "../db/pool.js";
 import {
@@ -59,7 +59,7 @@ Rules:
 async function getDocumentContent(
   documentId: number,
   maxChunks = 20,
-): Promise<string> {
+): Promise<{ text: string; chunkCount: number }> {
   const result = await pool.query(
     `SELECT heading, content FROM chunks
      WHERE document_id = $1
@@ -79,9 +79,25 @@ async function getDocumentContent(
     chunks = sampled;
   }
 
-  return chunks
+  const text = chunks
     .map((c) => (c.heading ? `## ${c.heading}\n\n${c.content}` : c.content))
     .join("\n\n---\n\n");
+
+  return { text, chunkCount: chunks.length };
+}
+
+export type QuizGenProgress =
+  | { phase: "document"; chunkCount: number; charCount: number }
+  | { phase: "generating"; charsReceived: number }
+  | { phase: "parsing" }
+  | { phase: "saving" };
+
+async function emitProgress(
+  onProgress: ((p: QuizGenProgress) => void | Promise<void>) | undefined,
+  p: QuizGenProgress,
+) {
+  if (!onProgress) return;
+  await Promise.resolve(onProgress(p));
 }
 
 export async function generateQuiz(
@@ -90,26 +106,78 @@ export async function generateQuiz(
   difficulty: QuizDifficulty,
   model = DEFAULT_CHAT_MODEL,
   provider = DEFAULT_CHAT_PROVIDER,
+  opts?: {
+    onProgress?: (p: QuizGenProgress) => void | Promise<void>;
+    signal?: AbortSignal;
+  },
 ): Promise<{
   model: string;
   provider: string;
   questions: GeneratedQuestion[];
 }> {
-  const content = await getDocumentContent(documentId);
+  const { text: content, chunkCount } = await getDocumentContent(documentId);
+  await emitProgress(opts?.onProgress, {
+    phase: "document",
+    chunkCount,
+    charCount: content.length,
+  });
+
   if (!content.trim()) {
     throw new Error("Document has no indexed content");
   }
 
-  const response = await structuredChat(getClientForProvider(provider), {
+  const client = getClientForProvider(provider);
+  const messages: { role: "system" | "user"; content: string }[] = [
+    { role: "system", content: buildSystemPrompt(numQuestions, difficulty) },
+    { role: "user", content },
+  ];
+
+  const chatOpts = {
     model,
-    messages: [
-      { role: "system", content: buildSystemPrompt(numQuestions, difficulty) },
-      { role: "user", content },
-    ],
+    messages,
     schema: QuizResponseSchema,
     temperature: 0.7,
     maxTokens: 8192,
-  });
+  };
+
+  let response: z.infer<typeof QuizResponseSchema>;
+
+  if (opts?.onProgress || opts?.signal) {
+    let charsReceived = 0;
+    let lastReported = 0;
+    let lastReportTime = 0;
+    const minChars = 384;
+    const minMs = 320;
+
+    response = await structuredStreamChat(client, {
+      ...chatOpts,
+      ...(opts.signal !== undefined ? { signal: opts.signal } : {}),
+      onToken: (token) => {
+        charsReceived += token.length;
+        const now = Date.now();
+        if (
+          charsReceived - lastReported >= minChars ||
+          now - lastReportTime >= minMs
+        ) {
+          lastReported = charsReceived;
+          lastReportTime = now;
+          void emitProgress(opts?.onProgress, {
+            phase: "generating",
+            charsReceived,
+          });
+        }
+      },
+      onStreamComplete: async () => {
+        await emitProgress(opts?.onProgress, {
+          phase: "generating",
+          charsReceived,
+        });
+        await emitProgress(opts?.onProgress, { phase: "parsing" });
+      },
+    });
+  } else {
+    response = await structuredChat(client, chatOpts);
+  }
 
   return {
     model,

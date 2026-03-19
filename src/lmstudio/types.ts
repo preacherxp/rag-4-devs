@@ -24,6 +24,7 @@ export type ChatOptions = {
     | { type: "json_schema"; json_schema: { name: string; strict?: boolean; schema: Record<string, unknown> } }
     | undefined;
   stop?: string[] | undefined;
+  signal?: AbortSignal | undefined;
 };
 
 export type AvailableModel = {
