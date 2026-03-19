@@ -5,8 +5,9 @@
   import QuizQuestionComp from "./QuizQuestion.svelte";
   import QuizResults from "./QuizResults.svelte";
 
-  let { onnewquiz }: {
+  let { onnewquiz, onclose }: {
     onnewquiz: () => void;
+    onclose: () => void;
   } = $props();
 
   let showResults = $state(false);
@@ -60,10 +61,17 @@
 {#if quiz.activeQuiz}
   <div class="quiz-view">
     <div class="quiz-header">
-      <h2>{quiz.activeQuiz.documentLabel}</h2>
-      <span class="quiz-meta">
-        {quiz.activeQuiz.difficulty} &middot; {quiz.activeQuiz.numQuestions} questions
-      </span>
+      <div class="quiz-header-text">
+        <h2>{quiz.activeQuiz.documentLabel}</h2>
+        <span class="quiz-meta">
+          {quiz.activeQuiz.difficulty} &middot; {quiz.activeQuiz.numQuestions} questions
+        </span>
+      </div>
+      <button
+        type="button"
+        class="btn btn-secondary quiz-close"
+        onclick={() => onclose()}
+      >Close</button>
     </div>
 
     {#if showResults || quiz.activeQuiz.completedAt}
@@ -111,7 +119,20 @@
   }
 
   .quiz-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
     margin-bottom: 24px;
+  }
+
+  .quiz-header-text {
+    min-width: 0;
+  }
+
+  .quiz-close {
+    flex-shrink: 0;
+    margin-top: 2px;
   }
 
   .quiz-header h2 {

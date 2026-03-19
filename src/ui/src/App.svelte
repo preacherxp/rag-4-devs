@@ -321,6 +321,19 @@
     }
   }
 
+  function handleCloseQuiz() {
+    quiz.activeId = null;
+    quiz.activeQuiz = null;
+    quiz.currentQuestionIndex = 0;
+    quiz.isGenerating = false;
+    history.pushState(
+      null,
+      "",
+      buildHash(chat.sessionId || null, null, false),
+    );
+    handleRoute();
+  }
+
   function handleQuizCreated(id: string) {
     fetchQuizzes()
       .then((list) => {
@@ -515,9 +528,9 @@
     </div>
 
     {#if currentView === "quiz-setup"}
-      <QuizSetup onquizcreated={handleQuizCreated} />
+      <QuizSetup onquizcreated={handleQuizCreated} onclose={handleCloseQuiz} />
     {:else if currentView === "quiz" || currentView === "quiz-results"}
-      <QuizView onnewquiz={handleNewQuiz} />
+      <QuizView onnewquiz={handleNewQuiz} onclose={handleCloseQuiz} />
     {:else}
       <ChatArea {streamingContent} {streamingSources} {showTyping} />
       <InputArea bind:this={inputArea} onsend={handleSend} />

@@ -4,8 +4,9 @@
   import { parseModelValue } from "../lib/utils";
   import ModelSelector from "./ModelSelector.svelte";
 
-  let { onquizcreated }: {
+  let { onquizcreated, onclose }: {
     onquizcreated: (id: string) => void;
+    onclose: () => void;
   } = $props();
 
   let selectedDocId = $state<number | null>(null);
@@ -42,8 +43,17 @@
 </script>
 
 <div class="quiz-setup">
-  <h2>New Quiz</h2>
-  <p class="subtitle">Generate a multiple-choice quiz from an indexed document.</p>
+  <div class="quiz-setup-header">
+    <div class="quiz-setup-header-text">
+      <h2>New Quiz</h2>
+      <p class="subtitle">Generate a multiple-choice quiz from an indexed document.</p>
+    </div>
+    <button
+      type="button"
+      class="btn btn-secondary quiz-setup-close"
+      onclick={() => onclose()}
+    >Close</button>
+  </div>
 
   <div class="form-group">
     <label class="field-label" for="quiz-doc">Document</label>
@@ -126,6 +136,23 @@
     animation: slideUp 400ms ease both;
   }
 
+  .quiz-setup-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 32px;
+  }
+
+  .quiz-setup-header-text {
+    min-width: 0;
+  }
+
+  .quiz-setup-close {
+    flex-shrink: 0;
+    margin-top: 4px;
+  }
+
   h2 {
     font-family: 'Instrument Serif', serif;
     font-size: 28px;
@@ -136,7 +163,7 @@
   .subtitle {
     color: var(--text-3);
     font-size: 14px;
-    margin-bottom: 32px;
+    margin-bottom: 0;
   }
 
   .form-group {

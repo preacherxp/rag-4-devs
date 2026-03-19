@@ -1,8 +1,14 @@
 <script lang="ts">
+  import { tick } from "svelte";
   import { marked } from "marked";
   import { ui, docs } from "../lib/state.svelte";
   import { fetchDocument, deleteDocument as apiDeleteDoc } from "../lib/api";
   import type { DocumentPreview } from "../lib/types";
+  import {
+    extractTocFromMarkdown,
+    prettyPreviewTitle,
+    slugifyWithDedup,
+  } from "../lib/previewFormat";
 
   let {
     onnavchange = (_docId: number | null, _fullscreen: boolean) => {},
@@ -12,10 +18,14 @@
 
   let previewShellEl: HTMLDivElement | undefined = $state();
   let previewBodyEl: HTMLDivElement | undefined = $state();
+  let previewContentEl: HTMLDivElement | undefined = $state();
 
   let loading = $state(false);
   let doc = $state<DocumentPreview | null>(null);
   let error = $state<string | null>(null);
+  let readProgress = $state(0);
+  let activeTocSlug = $state<string | null>(null);
+  let tocSideOpen = $state(false);
 
   // Load document when selectedId changes
   $effect(() => {
@@ -23,8 +33,10 @@
     if (id == null) {
       doc = null;
       error = null;
+      tocSideOpen = false;
       return;
     }
+    tocSideOpen = false;
     loadDoc(id);
   });
 
@@ -86,11 +98,20 @@
     );
   }
 
+  function formatPrettyTime(dateStr: string) {
+    const d = new Date(dateStr);
+    if (Number.isNaN(d.getTime())) return dateStr;
+    return (
+      d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) +
+      " " +
+      d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
+    );
+  }
+
   function formatMetaValue(key: string, value: string) {
     if (!value) return "";
     if (key.includes("published") || key.endsWith("_at")) {
-      const ts = new Date(value);
-      if (!Number.isNaN(ts.getTime())) return ts.toLocaleString();
+      return formatPrettyTime(value);
     }
     return value;
   }
@@ -100,6 +121,7 @@
     const { metadata, body } = parseFrontmatter(doc.content);
     const normalizedBody = normalizeMarkdown(body || doc.content);
     const bodyHtml = marked.parse(normalizedBody) as string;
+    const toc = extractTocFromMarkdown(normalizedBody);
     const entries = Object.entries(metadata).filter(
       ([k]) => k !== "title" && k !== "cover_image",
     );
@@ -109,6 +131,125 @@
       entries,
       bodyHtml,
       metadata,
+      normalizedBody,
+      toc,
+    };
+  });
+
+  function updateReadProgress() {
+    const shell = previewShellEl;
+    if (!shell) return;
+    const max = shell.scrollHeight - shell.clientHeight;
+    readProgress =
+      max <= 0 ? 100 : Math.min(100, Math.max(0, (100 * shell.scrollTop) / max));
+  }
+
+  function updateActiveHeading() {
+    const shell = previewShellEl;
+    const contentEl = previewContentEl;
+    if (!shell || !contentEl) return;
+    const heads = [
+      ...contentEl.querySelectorAll("h1,h2,h3,h4,h5,h6"),
+    ] as HTMLElement[];
+    if (heads.length === 0) {
+      activeTocSlug = null;
+      return;
+    }
+    const shellTop = shell.getBoundingClientRect().top + 16;
+    let current: string | null = heads[0]?.id || null;
+    for (const h of heads) {
+      if (!h.id) continue;
+      if (h.getBoundingClientRect().top <= shellTop) current = h.id;
+    }
+    activeTocSlug = current;
+  }
+
+  function scrollToHeadingId(slug: string, e?: Event) {
+    e?.preventDefault();
+    const shell = previewShellEl;
+    const el = previewContentEl?.querySelector(`#${CSS.escape(slug)}`);
+    if (!shell || !el || !(el instanceof HTMLElement)) return;
+    const y =
+      el.getBoundingClientRect().top -
+      shell.getBoundingClientRect().top +
+      shell.scrollTop -
+      12;
+    shell.scrollTo({ top: Math.max(0, y), behavior: "smooth" });
+  }
+
+  function handleTocKeydown(slug: string, e: KeyboardEvent) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      scrollToHeadingId(slug);
+    }
+  }
+
+  $effect(() => {
+    const id = docs.selectedId;
+    const shell = previewShellEl;
+    if (id == null || !shell) return;
+    shell.scrollTop = 0;
+    readProgress = 0;
+  });
+
+  $effect(() => {
+    const p = parsed();
+    if (!p || loading || error || !previewContentEl) return;
+
+    void p.bodyHtml;
+    const expectDocId = doc?.id;
+    const bodySnapshot = p.bodyHtml;
+
+    tick().then(() => {
+      if (
+        !previewContentEl ||
+        doc?.id !== expectDocId ||
+        parsed()?.bodyHtml !== bodySnapshot
+      ) {
+        return;
+      }
+      const toc = p.toc;
+      const domHeads = [
+        ...previewContentEl.querySelectorAll("h1,h2,h3,h4,h5,h6"),
+      ] as HTMLElement[];
+      const used = new Set(toc.map((t) => t.slug));
+      let i = 0;
+      for (const h of domHeads) {
+        h.id =
+          i < toc.length
+            ? toc[i].slug
+            : slugifyWithDedup(h.textContent || "section", used);
+        i += 1;
+      }
+      updateReadProgress();
+      updateActiveHeading();
+    });
+  });
+
+  $effect(() => {
+    if (!ui.previewOpen) return;
+    const shell = previewShellEl;
+    if (!shell) return;
+
+    const onScroll = () => {
+      updateReadProgress();
+      updateActiveHeading();
+    };
+
+    const ro = new ResizeObserver(() => {
+      updateReadProgress();
+      updateActiveHeading();
+    });
+    ro.observe(shell);
+
+    shell.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", onScroll, { passive: true });
+    onScroll();
+
+    return () => {
+      ro.disconnect();
+      shell.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", onScroll);
     };
   });
 
@@ -211,16 +352,23 @@
   class:open={ui.previewOpen}
   class:fullscreen={ui.previewFullscreen}
 >
-  <div class="preview-header">
-    <div class="preview-header-info">
-      <h2>{doc?.label || "Document Preview"}</h2>
-      <div class="preview-meta">
-        {#if doc}
-          {doc.filePath} &middot; {new Date(doc.updatedAt).toLocaleString()}
-        {/if}
+  <div class="preview-header-wrap">
+    <div
+      class="preview-read-progress"
+      style="transform: scaleX({readProgress / 100});"
+    ></div>
+    <div class="preview-header">
+      <div class="preview-header-info">
+        <h2 title={doc?.label ? doc.label : undefined}>
+          {doc ? prettyPreviewTitle(doc.label) : "Document Preview"}
+        </h2>
+        <div class="preview-meta">
+          {#if doc}
+            {doc.label}.md &middot; {formatPrettyTime(doc.updatedAt)}
+          {/if}
+        </div>
       </div>
-    </div>
-    <div class="preview-actions">
+      <div class="preview-actions">
       <button
         class="preview-action-btn"
         title="Remove document"
@@ -274,6 +422,7 @@
           <line x1="6" y1="6" x2="18" y2="18"></line>
         </svg>
       </button>
+      </div>
     </div>
   </div>
 
@@ -295,6 +444,63 @@
         </div>
       {:else if parsed()}
         {@const p = parsed()!}
+        <div class="preview-shell-inner">
+          {#if p.toc.length > 0}
+            <div
+              class="preview-toc-rail"
+              class:open={tocSideOpen}
+            >
+              <aside
+                id="preview-toc-panel"
+                class="preview-toc-panel"
+                aria-label="On this page"
+                aria-hidden={!tocSideOpen}
+                inert={!tocSideOpen}
+              >
+                <div class="preview-toc-label">Contents</div>
+                <nav class="preview-toc-nav">
+                  {#each p.toc as item (item.slug)}
+                    <!-- svelte-ignore a11y_click_events_have_key_events -->
+                    <a
+                      href="#{item.slug}"
+                      class="preview-toc-link"
+                      class:active={activeTocSlug === item.slug}
+                      style="padding-left: {(item.level - 1) * 10}px"
+                      onclick={(e) => scrollToHeadingId(item.slug, e)}
+                      onkeydown={(e) => handleTocKeydown(item.slug, e)}
+                      >{item.text}</a
+                    >
+                  {/each}
+                </nav>
+              </aside>
+              <div class="preview-toc-seam">
+                <span class="preview-toc-mark" aria-hidden="true">§</span>
+                <button
+                  type="button"
+                  class="preview-toc-edge-tab"
+                  aria-expanded={tocSideOpen}
+                  aria-controls="preview-toc-panel"
+                  title={tocSideOpen ? "Hide contents" : "Show contents"}
+                  onclick={() => (tocSideOpen = !tocSideOpen)}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <polyline
+                      points={tocSideOpen ? "15 18 9 12 15 6" : "9 18 15 12 9 6"}
+                    ></polyline>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          {/if}
+          <div class="preview-main-col">
         <div class="preview-card-wrapper">
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div class="preview-resize-handle left" data-resize="left">
@@ -323,13 +529,15 @@
                 </div>
               {/if}
             </section>
-            <div class="preview-content">
+            <div class="preview-content" bind:this={previewContentEl}>
               {@html p.bodyHtml}
             </div>
           </article>
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div class="preview-resize-handle right" data-resize="right">
             <div class="preview-resize-grip"></div>
+          </div>
+        </div>
           </div>
         </div>
       {:else}
@@ -401,9 +609,25 @@
     max-width: 1100px;
   }
 
+  .preview-header-wrap {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .preview-read-progress {
+    height: 3px;
+    flex-shrink: 0;
+    width: 100%;
+    transform-origin: left center;
+    background: var(--amber);
+    opacity: 0.95;
+  }
+
   .preview-header {
     padding: 16px 24px;
-    border-bottom: 1px solid var(--border-subtle);
+    border-bottom: none;
     display: flex;
     align-items: flex-start;
     justify-content: space-between;
@@ -478,6 +702,147 @@
     padding: 24px;
     scrollbar-width: thin;
     scrollbar-color: var(--surface-3) transparent;
+  }
+
+  .preview-shell-inner {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    width: 100%;
+  }
+
+  .preview-toc-rail {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    gap: 0;
+  }
+
+  .preview-toc-panel {
+    flex-shrink: 0;
+    width: min(200px, 32vw);
+    max-width: min(200px, 32vw);
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    padding-right: 10px;
+    transition:
+      max-width 0.2s ease,
+      opacity 0.16s ease,
+      padding 0.2s ease;
+  }
+
+  .preview-toc-rail:not(.open) .preview-toc-panel {
+    max-width: 0;
+    width: 0;
+    min-width: 0;
+    opacity: 0;
+    padding-right: 0;
+    pointer-events: none;
+  }
+
+  .preview-toc-seam {
+    flex-shrink: 0;
+    width: 22px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px 0 10px;
+    gap: 6px;
+    border-right: 1px solid var(--border-subtle);
+    box-sizing: border-box;
+  }
+
+  .preview-toc-mark {
+    font-size: 11px;
+    font-family: "Instrument Serif", serif;
+    color: var(--text-3);
+    line-height: 1;
+    user-select: none;
+    opacity: 0.65;
+  }
+
+  .preview-toc-edge-tab {
+    flex-shrink: 0;
+    width: 100%;
+    margin: 0;
+    padding: 6px 0;
+    border: none;
+    border-radius: 0 5px 5px 0;
+    background: transparent;
+    color: var(--text-3);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition:
+      background 140ms ease,
+      color 140ms ease;
+  }
+
+  .preview-toc-edge-tab:hover {
+    background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+    color: var(--text);
+  }
+
+  .preview-toc-edge-tab :global(svg) {
+    width: 14px;
+    height: 14px;
+  }
+
+  .preview-toc-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-3);
+    padding: 2px 0 8px;
+    flex-shrink: 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
+    margin-bottom: 6px;
+  }
+
+  .preview-toc-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    padding: 0 0 8px;
+    max-height: min(calc(100vh - 200px), 62vh);
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--surface-3) transparent;
+  }
+
+  .preview-toc-link {
+    display: block;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--text-3);
+    text-decoration: none;
+    padding: 3px 0 3px 6px;
+    margin-left: -6px;
+    border-left: 2px solid transparent;
+    transition:
+      color 120ms ease,
+      border-color 120ms ease;
+  }
+
+  .preview-toc-link:hover {
+    color: var(--text-2);
+  }
+
+  .preview-toc-link.active {
+    color: var(--amber);
+    border-left-color: var(--amber);
+  }
+
+  .preview-main-col {
+    flex: 1;
+    min-width: 0;
   }
 
   .preview-card-wrapper {
@@ -556,6 +921,26 @@
     overflow-wrap: anywhere;
   }
 
+  :global(.preview-content h4),
+  :global(.preview-content h5),
+  :global(.preview-content h6) {
+    font-family: "Instrument Serif", serif;
+    font-weight: 400;
+    margin: 1em 0 0.4em;
+    color: var(--text);
+    line-height: 1.25;
+  }
+
+  :global(.preview-content h4) {
+    font-size: 1.05rem;
+  }
+  :global(.preview-content h5) {
+    font-size: 1rem;
+  }
+  :global(.preview-content h6) {
+    font-size: 0.95rem;
+  }
+
   :global(.preview-content h1),
   :global(.preview-content h2),
   :global(.preview-content h3) {
@@ -631,6 +1016,72 @@
   @media (max-width: 768px) {
     .preview-panel {
       width: 100vw;
+    }
+
+    .preview-shell-inner {
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .preview-toc-rail {
+      position: relative;
+      width: 100%;
+      top: auto;
+      flex-direction: column;
+      align-items: stretch;
+      max-height: none;
+    }
+
+    .preview-toc-seam {
+      order: -1;
+      flex-direction: row;
+      width: 100%;
+      justify-content: flex-start;
+      align-items: center;
+      padding: 6px 0 10px;
+      gap: 10px;
+      border-right: none;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .preview-toc-edge-tab {
+      width: auto;
+      min-width: 36px;
+      padding: 6px 10px;
+      border-radius: 6px;
+    }
+
+    .preview-toc-panel {
+      width: 100%;
+      max-width: none;
+      border-right: none;
+      padding-right: 0;
+      margin-right: 0;
+      transition:
+        max-height 0.22s ease,
+        opacity 0.16s ease,
+        padding 0.16s ease;
+    }
+
+    .preview-toc-rail:not(.open) .preview-toc-panel {
+      max-height: 0;
+      min-height: 0;
+      opacity: 0;
+      overflow: hidden;
+      padding-top: 0;
+      padding-bottom: 0;
+      margin-bottom: 0;
+      border-bottom: none;
+      pointer-events: none;
+    }
+
+    .preview-toc-rail.open .preview-toc-panel {
+      max-height: min(45vh, 320px);
+      opacity: 1;
+    }
+
+    .preview-toc-nav {
+      max-height: min(38vh, 260px);
     }
   }
 </style>

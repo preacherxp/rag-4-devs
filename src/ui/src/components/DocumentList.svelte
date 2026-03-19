@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { prettyDocumentLabel } from "../lib/previewFormat";
   import { docs } from "../lib/state.svelte";
 
   let { onselect, onfocus, ondelete }: {
@@ -47,7 +48,9 @@
           onclick={() => onselect(doc.id)}
         >
           <div class="doc-header">
-            <div class="doc-label">{doc.label}</div>
+            <div class="doc-label" title={doc.label}>
+              {prettyDocumentLabel(doc.label)}
+            </div>
             <span class="doc-actions">
               <!-- svelte-ignore a11y_click_events_have_key_events -->
               <span
@@ -67,7 +70,6 @@
               >&#10005;</span>
             </span>
           </div>
-          <div class="doc-path">{doc.filePath}</div>
         </button>
       {/each}
     {/if}
@@ -112,7 +114,7 @@
 
   .doc-header {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     gap: 6px;
   }
 
@@ -122,15 +124,15 @@
     color: var(--text);
     flex: 1;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    line-height: 1.35;
+    overflow-wrap: anywhere;
   }
 
   .doc-actions {
     display: flex;
     gap: 2px;
     flex-shrink: 0;
+    padding-top: 1px;
   }
 
   .doc-focus,
@@ -175,16 +177,6 @@
     background: rgba(229,57,53,0.15) !important;
     color: var(--rose) !important;
     opacity: 1 !important;
-  }
-
-  .doc-path {
-    font-size: 10px;
-    color: var(--text-3);
-    font-family: 'JetBrains Mono', monospace;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    margin-top: 1px;
   }
 
   .doc-item.active {

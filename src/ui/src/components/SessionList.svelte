@@ -89,17 +89,20 @@
 
 <style>
   .sessions-section {
+    flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 8px;
     min-height: 0;
   }
 
   .sessions-list {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 4px;
     overflow-y: auto;
+    min-height: 0;
+    flex: 1;
     scrollbar-width: thin;
     scrollbar-color: var(--surface-3) transparent;
   }
@@ -110,7 +113,7 @@
     border-left: 3px solid transparent;
     background: transparent;
     color: var(--text-2);
-    border-radius: 0 6px 6px 0;
+    border-radius: 0 8px 8px 0;
     padding: 8px 10px;
     text-align: left;
     cursor: pointer;
