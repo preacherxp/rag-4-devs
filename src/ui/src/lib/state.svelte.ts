@@ -26,6 +26,7 @@ export const ui = $state({
   lightboxSrc: null as string | null,
   status: { documents: 0, chunks: 0 },
   statusError: false,
+  activeTab: "sessions" as "sessions" | "documents" | "quizzes",
 });
 
 export const quiz = $state({

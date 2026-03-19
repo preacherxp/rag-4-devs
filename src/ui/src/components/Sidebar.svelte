@@ -75,13 +75,37 @@
       New chat
     </button>
 
-    <SessionList {onswitchsession} {ondeletesession} />
-    <DocumentList
-      onselect={onselectdoc}
-      onfocus={onfocusdoc}
-      ondelete={ondeletedoc}
-    />
-    <QuizList {onselectquiz} {ondeletequiz} {onnewquiz} />
+    <div class="tab-bar">
+      <button
+        class="tab-btn"
+        class:active={ui.activeTab === "sessions"}
+        onclick={() => (ui.activeTab = "sessions")}
+      >Sessions</button>
+      <button
+        class="tab-btn"
+        class:active={ui.activeTab === "documents"}
+        onclick={() => (ui.activeTab = "documents")}
+      >Docs</button>
+      <button
+        class="tab-btn"
+        class:active={ui.activeTab === "quizzes"}
+        onclick={() => (ui.activeTab = "quizzes")}
+      >Quizzes</button>
+    </div>
+
+    <div class="tab-content">
+      {#if ui.activeTab === "sessions"}
+        <SessionList {onswitchsession} {ondeletesession} />
+      {:else if ui.activeTab === "documents"}
+        <DocumentList
+          onselect={onselectdoc}
+          onfocus={onfocusdoc}
+          ondelete={ondeletedoc}
+        />
+      {:else if ui.activeTab === "quizzes"}
+        <QuizList {onselectquiz} {ondeletequiz} {onnewquiz} />
+      {/if}
+    </div>
   </div>
 
   <button class="sidebar-toggle" title="Toggle sidebar" onclick={toggle}>
@@ -171,6 +195,43 @@
   .status-dot.error {
     background: var(--rose);
     box-shadow: 0 0 6px rgba(251, 113, 133, 0.4);
+  }
+
+  .tab-bar {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .tab-btn {
+    flex: 1;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text-3);
+    font-family: 'DM Sans', system-ui, sans-serif;
+    font-size: 12px;
+    font-weight: 500;
+    padding: 6px 0;
+    cursor: pointer;
+    transition: color 150ms, border-color 150ms;
+  }
+
+  .tab-btn:hover {
+    color: var(--text);
+  }
+
+  .tab-btn.active {
+    color: var(--amber);
+    border-bottom-color: var(--amber);
+  }
+
+  .tab-content {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
   }
 
   .sidebar-toggle {

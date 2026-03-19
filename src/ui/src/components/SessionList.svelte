@@ -100,7 +100,6 @@
     flex-direction: column;
     gap: 2px;
     overflow-y: auto;
-    max-height: 180px;
     scrollbar-width: thin;
     scrollbar-color: var(--surface-3) transparent;
   }
