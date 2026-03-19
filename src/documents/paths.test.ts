@@ -3,6 +3,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import {
+  isMarkdownFile,
+  isPathWithinDir,
   listMarkdownFiles,
   listRagDirectories,
   relativeDocumentPath,
@@ -25,6 +27,18 @@ afterEach(() => {
 });
 
 describe("document path helpers", () => {
+  test("isMarkdownFile is case-insensitive on extension", () => {
+    expect(isMarkdownFile("x.md")).toBe(true);
+    expect(isMarkdownFile("x.MD")).toBe(true);
+    expect(isMarkdownFile("x.txt")).toBe(false);
+  });
+
+  test("isPathWithinDir rejects paths outside the directory", () => {
+    expect(isPathWithinDir("/a/b/c", "/a/b")).toBe(true);
+    expect(isPathWithinDir("/a/b", "/a/b")).toBe(true);
+    expect(isPathWithinDir("/a/c", "/a/b")).toBe(false);
+  });
+
   test("recursively lists nested markdown files in stable order", () => {
     const ragDir = createTempRagDir();
     mkdirSync(resolve(ragDir, "docs/core"), { recursive: true });
@@ -38,11 +52,7 @@ describe("document path helpers", () => {
       relativeDocumentPath(filePath, ragDir),
     );
 
-    expect(files).toEqual([
-      "docs/api/reference.md",
-      "docs/core/index.md",
-      "root.md",
-    ]);
+    expect(files).toEqual(["docs/api/reference.md", "docs/core/index.md", "root.md"]);
   });
 
   test("ignores non-markdown files and still tracks nested directories", () => {
@@ -54,16 +64,12 @@ describe("document path helpers", () => {
     writeFileSync(resolve(ragDir, "docs/images/guide.md"), "# guide");
 
     expect(
-      listMarkdownFiles(ragDir).map((filePath) =>
-        relativeDocumentPath(filePath, ragDir),
-      ),
+      listMarkdownFiles(ragDir).map((filePath) => relativeDocumentPath(filePath, ragDir)),
     ).toEqual(["docs/images/guide.md"]);
 
-    expect(listRagDirectories(ragDir).map((dirPath) => relativeDocumentPath(dirPath, ragDir))).toEqual([
-      "",
-      "docs",
-      "docs/images",
-    ]);
+    expect(
+      listRagDirectories(ragDir).map((dirPath) => relativeDocumentPath(dirPath, ragDir)),
+    ).toEqual(["", "docs", "docs/images"]);
   });
 
   test("derives distinct labels for same-named files in different folders", () => {
@@ -87,9 +93,7 @@ describe("document path helpers", () => {
     const filePath = resolve(ragDir, "guides/nested/quick-start.md");
     writeFileSync(filePath, "# quick");
 
-    expect(relativeDocumentPath(filePath, ragDir)).toBe(
-      "guides/nested/quick-start.md",
-    );
+    expect(relativeDocumentPath(filePath, ragDir)).toBe("guides/nested/quick-start.md");
     expect(sourceLabel(filePath, ragDir)).toBe("guides/nested/quick-start");
   });
 });

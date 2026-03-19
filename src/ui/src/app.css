@@ -1,26 +1,30 @@
 :root {
-  --ink:          #0c0a09;
-  --surface:      #1c1917;
-  --surface-2:    #292524;
-  --surface-3:    #44403c;
-  --border:       #57534e;
-  --border-subtle:#292524;
-  --text:         #fafaf9;
-  --text-2:       #d6d3d1;
-  --text-3:       #a8a29e;
-  --amber:        #f59e0b;
-  --amber-dim:    #92400e;
-  --amber-glow:   rgba(245,158,11,0.15);
-  --emerald:      #34d399;
-  --rose:         #fb7185;
-  --sidebar-w:    300px;
-  --transition:   300ms ease;
+  --ink: #0c0a09;
+  --surface: #1c1917;
+  --surface-2: #292524;
+  --surface-3: #44403c;
+  --border: #57534e;
+  --border-subtle: #292524;
+  --text: #fafaf9;
+  --text-2: #d6d3d1;
+  --text-3: #a8a29e;
+  --amber: #f59e0b;
+  --amber-dim: #92400e;
+  --amber-glow: rgba(245, 158, 11, 0.15);
+  --emerald: #34d399;
+  --rose: #fb7185;
+  --sidebar-w: 300px;
+  --transition: 300ms ease;
 }
 
-* { box-sizing: border-box; margin: 0; padding: 0; }
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
 
 body {
-  font-family: 'DM Sans', system-ui, sans-serif;
+  font-family: "DM Sans", system-ui, sans-serif;
   background: var(--ink);
   color: var(--text);
   min-height: 100vh;
@@ -28,54 +32,97 @@ body {
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; }
-  to   { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slideUp {
-  from { opacity: 0; transform: translateY(12px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes pulseTyping {
-  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
-  40% { opacity: 1; transform: scale(1); }
+  0%,
+  80%,
+  100% {
+    opacity: 0.3;
+    transform: scale(0.8);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @keyframes panelSlideIn {
-  from { transform: translateX(100%); }
-  to   { transform: translateX(0); }
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(0);
+  }
 }
 
 @keyframes panelSlideOut {
-  from { transform: translateX(0); }
-  to   { transform: translateX(100%); }
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(100%);
+  }
 }
 
 /* ── Scrollbar Styles (Webkit) ── */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
 ::-webkit-scrollbar-thumb {
   background: var(--surface-3);
   border-radius: 3px;
 }
-::-webkit-scrollbar-thumb:hover { background: var(--border); }
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border);
+}
 
 /* ── Buttons ── */
 .btn {
   border: none;
   border-radius: 8px;
   padding: 8px 14px;
-  font-family: 'DM Sans', system-ui, sans-serif;
+  font-family: "DM Sans", system-ui, sans-serif;
   font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 150ms, transform 150ms, box-shadow 150ms;
+  transition:
+    background 150ms,
+    transform 150ms,
+    box-shadow 150ms;
 }
 
-.btn:hover { transform: scale(1.02); }
-.btn:active { transform: scale(0.98); }
-.btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+.btn:hover {
+  transform: scale(1.02);
+}
+.btn:active {
+  transform: scale(0.98);
+}
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
 
 .btn-primary {
   background: var(--amber);
@@ -107,7 +154,7 @@ select {
   padding: 8px 10px;
   background: var(--surface);
   color: var(--text);
-  font-family: 'DM Sans', system-ui, sans-serif;
+  font-family: "DM Sans", system-ui, sans-serif;
   font-size: 13px;
   outline: none;
   appearance: none;
@@ -148,10 +195,13 @@ select:focus {
   padding: 8px 10px;
   background: var(--surface);
   color: var(--text);
-  font-family: 'DM Sans', system-ui, sans-serif;
+  font-family: "DM Sans", system-ui, sans-serif;
   font-size: 13px;
   outline: none;
-  transition: border-color 150ms, background 150ms, box-shadow 150ms;
+  transition:
+    border-color 150ms,
+    background 150ms,
+    box-shadow 150ms;
 }
 
 .sidebar-search::placeholder {
@@ -208,7 +258,7 @@ select:focus {
   background: rgba(255, 255, 255, 0.06);
   padding: 2px 6px;
   border-radius: 4px;
-  font-family: 'JetBrains Mono', monospace;
+  font-family: "JetBrains Mono", monospace;
   font-size: 0.88em;
 }
 
@@ -254,7 +304,9 @@ select:focus {
   color: var(--amber);
   text-decoration: none;
   overflow-wrap: anywhere;
-  transition: border-color 150ms, background 150ms;
+  transition:
+    border-color 150ms,
+    background 150ms;
 }
 
 .embed-link:hover {

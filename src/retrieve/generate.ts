@@ -49,11 +49,7 @@ export async function* ragStream(
 ): AsyncGenerator<{ type: "token"; data: string } | { type: "sources"; data: SourceMeta[] }> {
   const results = await searchChunks(query, 5, 0.3, focusDocumentId);
   const context = assembleContext(results);
-  const history = await getRecentMessages(
-    sessionId,
-    HISTORY_WINDOW,
-    historyBeforeSequence,
-  );
+  const history = await getRecentMessages(sessionId, HISTORY_WINDOW, historyBeforeSequence);
 
   const messages: ChatMessage[] = [
     { role: "system" as const, content: `${SYSTEM_PROMPT}\n\n${context}` },

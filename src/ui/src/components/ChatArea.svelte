@@ -18,9 +18,9 @@
 
   $effect(() => {
     // Re-run whenever messages change or streaming content updates
-    chat.messages;
-    streamingContent;
-    showTyping;
+    void chat.messages;
+    void streamingContent;
+    void showTyping;
     if (messagesEl) {
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }

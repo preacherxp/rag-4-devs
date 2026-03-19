@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { config, DEFAULT_CHAT_MODEL, DEFAULT_CHAT_PROVIDER } from "./config.js";
+import { DEFAULT_CHAT_MODEL, DEFAULT_CHAT_PROVIDER } from "./config.js";
 import {
   appendMessage,
   createSession,
@@ -13,11 +13,7 @@ import {
   updateSessionModel,
 } from "./chat/store.js";
 import { pool } from "./db/pool.js";
-import {
-  deleteDocument,
-  getDocumentPreview,
-  listDocuments,
-} from "./documents/store.js";
+import { deleteDocument, getDocumentPreview, listDocuments } from "./documents/store.js";
 import { listChatModels } from "./lmstudio/index.js";
 import { lmClient, orClient, providers } from "./llm.js";
 import { ragStream } from "./retrieve/generate.js";
@@ -180,11 +176,7 @@ app.get("/api/models", async (c) => {
   }
 
   // Ensure default model is present
-  if (
-    !allModels.some(
-      (m) => m.id === DEFAULT_CHAT_MODEL && m.provider === DEFAULT_CHAT_PROVIDER,
-    )
-  ) {
+  if (!allModels.some((m) => m.id === DEFAULT_CHAT_MODEL && m.provider === DEFAULT_CHAT_PROVIDER)) {
     allModels.push({
       id: DEFAULT_CHAT_MODEL,
       object: "model",
@@ -219,8 +211,7 @@ app.get("/api/models", async (c) => {
     defaultProvider: DEFAULT_CHAT_PROVIDER,
     providers,
     models: deduped.sort(
-      (a, b) =>
-        a.provider.localeCompare(b.provider) || a.id.localeCompare(b.id),
+      (a, b) => a.provider.localeCompare(b.provider) || a.id.localeCompare(b.id),
     ),
   });
 });
@@ -425,10 +416,7 @@ app.patch("/api/quizzes/:id/questions/:index", async (c) => {
 
   const body = await c.req.json<{ selectedAnswer?: string | null }>();
   const selectedAnswer = body.selectedAnswer ?? null;
-  if (
-    selectedAnswer !== null &&
-    !["A", "B", "C", "D"].includes(selectedAnswer)
-  ) {
+  if (selectedAnswer !== null && !["A", "B", "C", "D"].includes(selectedAnswer)) {
     return c.json({ error: "selectedAnswer must be A, B, C, D, or null" }, 400);
   }
 
@@ -463,11 +451,8 @@ app.post("/api/reindex", async (c) => {
 // Serve built Svelte SPA from ui/dist/
 const uiDist = resolve(__dirname, "ui/dist");
 
-app.get("/*", async (c, next) => {
-  const filePath = resolve(
-    uiDist,
-    c.req.path.replace(/^\//, "") || "index.html",
-  );
+app.get("/*", async (c, _next) => {
+  const filePath = resolve(uiDist, c.req.path.replace(/^\//, "") || "index.html");
   const file = Bun.file(filePath);
   if (await file.exists()) {
     return new Response(file);

@@ -73,10 +73,7 @@ export function listRagDirectories(ragDir = config.RAG_DIR): string[] {
   return dirs;
 }
 
-export function relativeDocumentPath(
-  filePath: string,
-  ragDir = config.RAG_DIR,
-): string {
+export function relativeDocumentPath(filePath: string, ragDir = config.RAG_DIR): string {
   return toPosixPath(relative(resolveRagDir(ragDir), resolve(filePath)));
 }
 

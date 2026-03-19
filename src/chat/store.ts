@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { config, DEFAULT_CHAT_MODEL, DEFAULT_CHAT_PROVIDER } from "../config.js";
+import { DEFAULT_CHAT_MODEL, DEFAULT_CHAT_PROVIDER } from "../config.js";
 import { pool } from "../db/pool.js";
 
 export type ChatRole = "user" | "assistant";
@@ -85,9 +85,7 @@ export async function createSession(
   return mapSession(result.rows[0]!);
 }
 
-export async function getSession(
-  sessionId: string,
-): Promise<ChatSession | null> {
+export async function getSession(sessionId: string): Promise<ChatSession | null> {
   const result = await pool.query<SessionRow>(
     `SELECT id, model, provider, created_at, updated_at
      FROM chat_sessions
@@ -110,9 +108,7 @@ export type ChatSessionSummary = {
 };
 
 export async function listSessions(limit = 50): Promise<ChatSessionSummary[]> {
-  const result = await pool.query<
-    SessionRow & { message_count: string; preview: string | null }
-  >(
+  const result = await pool.query<SessionRow & { message_count: string; preview: string | null }>(
     `SELECT s.id, s.model, s.provider, s.created_at, s.updated_at,
             COUNT(m.sequence)::text AS message_count,
             (SELECT content FROM chat_messages
@@ -229,9 +225,7 @@ export async function appendMessage(
 }
 
 export async function deleteSession(sessionId: string): Promise<boolean> {
-  const result = await pool.query(`DELETE FROM chat_sessions WHERE id = $1`, [
-    sessionId,
-  ]);
+  const result = await pool.query(`DELETE FROM chat_sessions WHERE id = $1`, [sessionId]);
   return (result.rowCount ?? 0) > 0;
 }
 

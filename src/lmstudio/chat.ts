@@ -22,15 +22,9 @@ export async function chatCompletion(
       model: options.model,
       messages: options.messages,
       stream: false,
-      ...(options.temperature !== undefined
-        ? { temperature: options.temperature }
-        : {}),
-      ...(options.maxTokens !== undefined
-        ? { max_tokens: options.maxTokens }
-        : {}),
-      ...(options.responseFormat
-        ? { response_format: options.responseFormat }
-        : {}),
+      ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
+      ...(options.maxTokens !== undefined ? { max_tokens: options.maxTokens } : {}),
+      ...(options.responseFormat ? { response_format: options.responseFormat } : {}),
       ...(options.stop ? { stop: options.stop } : {}),
     }),
   });
@@ -62,15 +56,9 @@ export async function* streamChat(
       model: options.model,
       messages: options.messages,
       stream: true,
-      ...(options.temperature !== undefined
-        ? { temperature: options.temperature }
-        : {}),
-      ...(options.maxTokens !== undefined
-        ? { max_tokens: options.maxTokens }
-        : {}),
-      ...(options.responseFormat
-        ? { response_format: options.responseFormat }
-        : {}),
+      ...(options.temperature !== undefined ? { temperature: options.temperature } : {}),
+      ...(options.maxTokens !== undefined ? { max_tokens: options.maxTokens } : {}),
+      ...(options.responseFormat ? { response_format: options.responseFormat } : {}),
       ...(options.stop ? { stop: options.stop } : {}),
     }),
   });
@@ -136,9 +124,7 @@ export async function streamChatToString(
   return result;
 }
 
-export async function listChatModels(
-  client: LmStudioClient,
-): Promise<AvailableModel[]> {
+export async function listChatModels(client: LmStudioClient): Promise<AvailableModel[]> {
   const res = await fetch(`${client.baseUrl}/models`, {
     method: "GET",
     headers: client.headers,
