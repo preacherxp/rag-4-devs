@@ -52,3 +52,28 @@ jobs:
           name: ui-dist
           path: src/ui/dist/
           if-no-files-found: error
+
+  release:
+    needs: build
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Bump version, tag, and push
+        run: |
+          set -euo pipefail
+          npm version patch --no-git-tag-version
+          NEW_VER=$(jq -r .version package.json)
+          jq --arg v "$NEW_VER" '.version = $v' src/ui/package.json > src/ui/package.json.tmp
+          mv src/ui/package.json.tmp src/ui/package.json
+          git config user.name "ai-devs-4-builders-rag[bot]"
+          git add package.json src/ui/package.json
+          git commit -m "chore: release v${NEW_VER}"
+          git tag "v${NEW_VER}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          git push origin "refs/tags/v${NEW_VER}"
