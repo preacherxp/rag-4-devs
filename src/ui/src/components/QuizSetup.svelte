@@ -1,6 +1,8 @@
 <script lang="ts">
   import { docs, quiz } from "../lib/state.svelte";
   import { createQuiz } from "../lib/api";
+  import { parseModelValue } from "../lib/utils";
+  import ModelSelector from "./ModelSelector.svelte";
 
   let { onquizcreated }: {
     onquizcreated: (id: string) => void;
@@ -11,6 +13,13 @@
   let difficulty = $state<"easy" | "medium" | "hard">("medium");
   let error = $state("");
 
+  function handleQuizModelChange(value: string) {
+    if (!value) return;
+    const selected = parseModelValue(value, quiz.defaultProvider);
+    quiz.model = selected.model;
+    quiz.provider = selected.provider;
+  }
+
   async function handleGenerate() {
     if (!selectedDocId) return;
     quiz.isGenerating = true;
@@ -20,6 +29,8 @@
         documentId: selectedDocId,
         numQuestions,
         difficulty,
+        model: quiz.model || quiz.defaultModel,
+        provider: quiz.provider || quiz.defaultProvider,
       });
       onquizcreated(created.id);
     } catch (e) {
@@ -42,6 +53,19 @@
         <option value={doc.id}>{doc.label}</option>
       {/each}
     </select>
+  </div>
+
+  <div class="form-group">
+    <ModelSelector
+      selectId="quiz-model-select"
+      label="Quiz model"
+      model={quiz.model}
+      provider={quiz.provider}
+      defaultModel={quiz.defaultModel}
+      defaultProvider={quiz.defaultProvider}
+      disabled={quiz.isGenerating}
+      onchange={handleQuizModelChange}
+    />
   </div>
 
   <div class="form-group">

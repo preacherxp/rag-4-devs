@@ -1,7 +1,27 @@
 <script lang="ts">
   import { chat } from "../lib/state.svelte";
 
-  let { onchange }: { onchange: (value: string) => void } = $props();
+  let {
+    selectId = "model-select",
+    label = "Model",
+    model,
+    provider,
+    defaultModel,
+    defaultProvider,
+    disabled = false,
+    info = "",
+    onchange,
+  }: {
+    selectId?: string;
+    label?: string;
+    model: string;
+    provider: string;
+    defaultModel: string;
+    defaultProvider: string;
+    disabled?: boolean;
+    info?: string;
+    onchange: (value: string) => void;
+  } = $props();
 
   const providerLabels: Record<string, string> = {
     lmstudio: "LM Studio",
@@ -14,7 +34,7 @@
     provider: string;
   }
 
-  const options = $derived(() => {
+  const options = $derived.by(() => {
     const items: OptionItem[] = chat.models.map((m) => ({
       value: `${m.provider}:${m.id}`,
       label: m.id,
@@ -22,72 +42,65 @@
     }));
 
     const keys = new Set(items.map((i) => i.value));
-    const currentKey = `${chat.provider}:${chat.model}`;
+    const currentKey = `${provider}:${model}`;
 
-    if (chat.model && !keys.has(currentKey)) {
-      items.unshift({ value: currentKey, label: chat.model, provider: chat.provider });
+    if (model && !keys.has(currentKey)) {
+      items.unshift({ value: currentKey, label: model, provider });
     } else if (
-      !chat.model &&
-      chat.defaultModel &&
-      !keys.has(`${chat.defaultProvider}:${chat.defaultModel}`)
+      !model &&
+      defaultModel &&
+      !keys.has(`${defaultProvider}:${defaultModel}`)
     ) {
       items.unshift({
-        value: `${chat.defaultProvider}:${chat.defaultModel}`,
-        label: chat.defaultModel,
-        provider: chat.defaultProvider,
+        value: `${defaultProvider}:${defaultModel}`,
+        label: defaultModel,
+        provider: defaultProvider,
       });
     }
 
     return items;
   });
 
-  const grouped = $derived(() => {
+  const grouped = $derived.by(() => {
     const groups: Record<string, OptionItem[]> = {};
-    for (const item of options()) {
+    for (const item of options) {
       (groups[item.provider] = groups[item.provider] || []).push(item);
     }
     return groups;
   });
 
-  const hasMultipleProviders = $derived(() => Object.keys(grouped()).length > 1);
+  const hasMultipleProviders = $derived.by(() => Object.keys(grouped).length > 1);
 
   const currentValue = $derived.by(() =>
-    chat.model
-      ? `${chat.provider}:${chat.model}`
-      : `${chat.defaultProvider}:${chat.defaultModel}`,
+    model ? `${provider}:${model}` : `${defaultProvider}:${defaultModel}`,
   );
 </script>
 
 <section class="session-section">
-  <div class="session-info">
-    {#if chat.sessionId}
-      {chat.sessionId.slice(0, 8)} &middot;
-      {chat.provider === "openrouter" ? " OpenRouter" : ""}
-    {:else}
-      loading session...
-    {/if}
-  </div>
-  <label class="field-label" for="model-select">Model</label>
+  {#if info}
+    <div class="session-info">{info}</div>
+  {/if}
+  <label class="field-label" for={selectId}>{label}</label>
   <select
-    id="model-select"
+    id={selectId}
     value={currentValue}
-    disabled={chat.isStreaming || !chat.sessionId || options().length === 0}
+    disabled={disabled || options.length === 0}
     onchange={(e) => onchange((e.target as HTMLSelectElement).value)}
   >
-    {#if options().length === 0}
+    {#if options.length === 0}
       <option>No models available</option>
-    {:else if hasMultipleProviders()}
-      {#each ["lmstudio", "openrouter"] as provider}
-        {#if grouped()[provider]}
-          <optgroup label={providerLabels[provider] || provider}>
-            {#each grouped()[provider] as opt}
+    {:else if hasMultipleProviders}
+      {#each ["lmstudio", "openrouter"] as providerKey}
+        {#if grouped[providerKey]}
+          <optgroup label={providerLabels[providerKey] || providerKey}>
+            {#each grouped[providerKey] as opt}
               <option value={opt.value}>{opt.label}</option>
             {/each}
           </optgroup>
         {/if}
       {/each}
     {:else}
-      {#each options() as opt}
+      {#each options as opt}
         <option value={opt.value}>{opt.label}</option>
       {/each}
     {/if}

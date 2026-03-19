@@ -42,6 +42,13 @@ AI Devs 4 RAG is a local retrieval-augmented generation tool with a Svelte UI, H
    EMBED_DIMENSION=768
    ```
 
+## Database migrations
+
+Schema is defined in TypeScript (`src/db/schema.ts`) and versioned SQL lives under `drizzle/`. On startup the app runs [Drizzle’s migrator](https://orm.drizzle.team/docs/migrations) against `DATABASE_URL` (table `drizzle.__drizzle_migrations` tracks what’s applied).
+
+- After editing the schema, regenerate SQL: `bun run db:generate` (set `EMBED_DIMENSION` in `.env` first—the vector column width is baked into the generated migration).
+- Optional: `bun run db:studio` for Drizzle Studio.
+
 ## Running
 
 ```bash

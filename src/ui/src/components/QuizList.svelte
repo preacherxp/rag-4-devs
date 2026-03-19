@@ -24,12 +24,26 @@
 
   let query = $state("");
 
+  function displayModel(q: { id: string; model: string }) {
+    const stored = q.model?.trim();
+    if (stored) return stored;
+
+    if (q.id === quiz.activeId) {
+      const active = quiz.activeQuiz?.model?.trim();
+      if (active) return active;
+    }
+
+    const fallback = quiz.defaultModel?.trim();
+    return fallback || "unknown model";
+  }
+
   const normalizedQuery = $derived(query.trim().toLowerCase());
   const filteredQuizzes = $derived(
     normalizedQuery
       ? quiz.list.filter((item) => {
           const haystack = [
             item.documentLabel,
+            displayModel(item),
             item.difficulty,
             item.id,
           ]
@@ -43,6 +57,11 @@
 
 <section class="quiz-section">
   <div class="section-label">Quizzes</div>
+  {#if quiz.activeQuiz}
+    <div class="quiz-active-model" title={displayModel(quiz.activeQuiz)}>
+      Model: {displayModel(quiz.activeQuiz)}
+    </div>
+  {/if}
   <button class="btn btn-secondary" style="width:100%;margin-bottom:4px" onclick={onnewquiz}>
     New quiz
   </button>
@@ -79,7 +98,7 @@
               &middot; {q.score}/{q.numQuestions}
             {/if}
           </div>
-          <div class="quiz-item-date">{formatTime(q.createdAt)}</div>
+          <div class="quiz-item-date">{displayModel(q)} &middot; {formatTime(q.createdAt)}</div>
           <!-- svelte-ignore a11y_click_events_have_key_events -->
           <span
             class="quiz-delete"
@@ -109,6 +128,15 @@
     overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: var(--surface-3) transparent;
+  }
+
+  .quiz-active-model {
+    font-size: 10px;
+    color: var(--text-3);
+    font-family: 'JetBrains Mono', monospace;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .quiz-item {

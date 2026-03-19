@@ -3,9 +3,10 @@
   import SourcesList from "./SourcesList.svelte";
   import type { Source } from "../lib/types";
 
-  let { role, content, sources = [] }: {
+  let { role, content, model = null, sources = [] }: {
     role: "user" | "assistant" | "error";
     content: string;
+    model?: string | null;
     sources?: Source[];
   } = $props();
 
@@ -34,6 +35,9 @@
     {:else}
       {@html rendered}
       <SourcesList {sources} />
+    {/if}
+    {#if model && role === "assistant"}
+      <span class="msg-model">{model}</span>
     {/if}
   </div>
 </div>
@@ -110,6 +114,15 @@
   .msg.assistant :global(p) { margin: 0.4em 0; }
   .msg.assistant :global(ul),
   .msg.assistant :global(ol) { margin: 0.4em 0; padding-left: 1.4em; }
+
+  .msg-model {
+    display: block;
+    font-size: 10px;
+    color: var(--text-3);
+    margin-top: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    opacity: 0.7;
+  }
 
   @media (max-width: 768px) {
     .msg-wrapper { max-width: 95%; }

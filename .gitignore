@@ -24,3 +24,5 @@ command-center/data/
 .claude/
 
 rag/*
+
+.cursor/

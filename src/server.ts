@@ -61,7 +61,7 @@ app.post("/api/chat", async (c) => {
     return c.json({ error: "session not found" }, 404);
   }
 
-  const userMessage = await appendMessage(sessionId, "user", query);
+  const userMessage = await appendMessage(sessionId, "user", query, session.model);
 
   return streamSSE(c, async (stream) => {
     let assistantText = "";
@@ -86,7 +86,7 @@ app.post("/api/chat", async (c) => {
       }
 
       if (assistantText.trim()) {
-        await appendMessage(sessionId, "assistant", assistantText);
+        await appendMessage(sessionId, "assistant", assistantText, session.model);
       }
 
       await stream.writeSSE({ data: "[DONE]" });
@@ -273,6 +273,8 @@ app.post("/api/quizzes", async (c) => {
     documentId?: number;
     numQuestions?: number;
     difficulty?: string;
+    model?: string;
+    provider?: string;
   }>();
 
   const documentId = body.documentId;
@@ -290,11 +292,16 @@ app.post("/api/quizzes", async (c) => {
     return c.json({ error: "difficulty must be easy, medium, or hard" }, 400);
   }
 
+  const model = body.model?.trim() || undefined;
+  const provider = body.provider?.trim() || undefined;
+
   try {
     const generated = await generateQuiz(
       documentId,
       numQuestions,
       difficulty as "easy" | "medium" | "hard",
+      model,
+      provider,
     );
     const quiz = await createQuizInDb(
       documentId,

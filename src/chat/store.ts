@@ -7,6 +7,7 @@ export type ChatRole = "user" | "assistant";
 export type ChatMessage = {
   role: ChatRole;
   content: string;
+  model: string | null;
   createdAt: string;
   sequence: number;
 };
@@ -31,6 +32,7 @@ type SessionRow = {
 type MessageRow = {
   role: ChatRole;
   content: string;
+  model: string | null;
   created_at: Date | string;
   sequence: number;
 };
@@ -39,6 +41,7 @@ function mapMessage(row: MessageRow): ChatMessage {
   return {
     role: row.role,
     content: row.content,
+    model: row.model,
     createdAt: new Date(row.created_at).toISOString(),
     sequence: row.sequence,
   };
@@ -46,7 +49,7 @@ function mapMessage(row: MessageRow): ChatMessage {
 
 async function getMessages(sessionId: string): Promise<ChatMessage[]> {
   const result = await pool.query<MessageRow>(
-    `SELECT role, content, created_at, sequence
+    `SELECT role, content, model, created_at, sequence
      FROM chat_messages
      WHERE session_id = $1
      ORDER BY sequence ASC`,
@@ -174,6 +177,7 @@ export async function appendMessage(
   sessionId: string,
   role: ChatRole,
   content: string,
+  model?: string,
 ): Promise<ChatMessage> {
   const client = await pool.connect();
   try {
@@ -201,10 +205,10 @@ export async function appendMessage(
     const sequence = nextSequenceResult.rows[0]!.next_sequence;
 
     const inserted = await client.query<MessageRow>(
-      `INSERT INTO chat_messages (session_id, role, content, sequence)
-       VALUES ($1, $2, $3, $4)
-       RETURNING role, content, created_at, sequence`,
-      [sessionId, role, content, sequence],
+      `INSERT INTO chat_messages (session_id, role, content, model, sequence)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING role, content, model, created_at, sequence`,
+      [sessionId, role, content, model ?? null, sequence],
     );
 
     await client.query(
@@ -239,7 +243,7 @@ export async function getRecentMessages(
   const result =
     beforeSequence === undefined
       ? await pool.query<MessageRow>(
-          `SELECT role, content, created_at, sequence
+          `SELECT role, content, model, created_at, sequence
          FROM chat_messages
          WHERE session_id = $1
          ORDER BY sequence DESC
@@ -247,7 +251,7 @@ export async function getRecentMessages(
           [sessionId, limit],
         )
       : await pool.query<MessageRow>(
-          `SELECT role, content, created_at, sequence
+          `SELECT role, content, model, created_at, sequence
          FROM chat_messages
          WHERE session_id = $1
            AND sequence < $2

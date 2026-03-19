@@ -89,6 +89,8 @@ export function createQuiz(opts: {
   documentId: number;
   numQuestions: number;
   difficulty: string;
+  model: string;
+  provider: string;
 }): Promise<Quiz> {
   return json("/api/quizzes", {
     method: "POST",

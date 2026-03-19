@@ -18,6 +18,7 @@
     deleteQuizApi,
   } from "./lib/api";
   import type { Source } from "./lib/types";
+  import { parseModelValue } from "./lib/utils";
   import Sidebar from "./components/Sidebar.svelte";
   import ChatArea from "./components/ChatArea.svelte";
   import InputArea from "./components/InputArea.svelte";
@@ -186,17 +187,11 @@
     }
   }
 
-  function parseModelValue(value: string) {
-    const idx = value.indexOf(":");
-    if (idx === -1) return { provider: chat.defaultProvider, model: value };
-    return { provider: value.slice(0, idx), model: value.slice(idx + 1) };
-  }
-
   // ── Actions ──
 
   async function handleModelChange(value: string) {
     if (!chat.sessionId || !value || chat.isStreaming) return;
-    const selected = parseModelValue(value);
+    const selected = parseModelValue(value, chat.defaultProvider);
     const prev = { model: chat.model, provider: chat.provider };
 
     chat.model = selected.model;
@@ -220,6 +215,7 @@
     if (chat.isStreaming) return;
     const selected = parseModelValue(
       `${chat.provider}:${chat.model || chat.defaultModel}`,
+      chat.defaultProvider,
     );
     const session = await createSession(selected.model, selected.provider);
     chat.sessionId = session.id;
@@ -239,6 +235,7 @@
       chat.model = session.model;
       chat.provider = session.provider || chat.defaultProvider;
       chat.messages = session.messages || [];
+      currentView = "chat";
       if (updateHash)
         pushHash(session.id, docs.selectedId, ui.previewFullscreen);
     } catch {
@@ -343,6 +340,7 @@
       {
         role: "user" as const,
         content: text,
+        model: chat.model,
         sequence: chat.messages.length + 1,
         createdAt: new Date().toISOString(),
       },
@@ -374,6 +372,7 @@
             {
               role: "assistant" as const,
               content: event.data,
+              model: chat.model,
               sequence: chat.messages.length + 1,
               createdAt: new Date().toISOString(),
             },
@@ -389,6 +388,7 @@
           {
             role: "assistant" as const,
             content: streamingContent,
+            model: chat.model,
             sequence: chat.messages.length + 1,
             createdAt: new Date().toISOString(),
           },
@@ -415,6 +415,7 @@
         {
           role: "assistant" as const,
           content: `Connection error: ${msg}`,
+          model: chat.model,
           sequence: chat.messages.length + 1,
           createdAt: new Date().toISOString(),
         },
@@ -463,6 +464,8 @@
         chat.defaultModel = modelsPayload.defaultModel;
         chat.defaultProvider = modelsPayload.defaultProvider;
         chat.providers = modelsPayload.providers;
+        quiz.defaultModel = modelsPayload.defaultModel;
+        quiz.defaultProvider = modelsPayload.defaultProvider;
       }
 
       chat.sessions = sessions;
@@ -474,6 +477,8 @@
       chat.model = latestSession.model;
       chat.provider = latestSession.provider || chat.defaultProvider;
       chat.messages = latestSession.messages || [];
+      quiz.model = latestSession.model;
+      quiz.provider = latestSession.provider || quiz.defaultProvider;
 
       // Handle initial route or set session in URL
       const initialRoute = parseHash();

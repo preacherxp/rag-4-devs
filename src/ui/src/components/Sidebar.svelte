@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { ui } from "../lib/state.svelte";
+  import { chat, ui } from "../lib/state.svelte";
   import ModelSelector from "./ModelSelector.svelte";
   import SessionList from "./SessionList.svelte";
   import DocumentList from "./DocumentList.svelte";
@@ -69,7 +69,19 @@
       </div>
     </div>
 
-    <ModelSelector onchange={onmodelchange} />
+    <ModelSelector
+      selectId="chat-model-select"
+      label="Model"
+      model={chat.model}
+      provider={chat.provider}
+      defaultModel={chat.defaultModel}
+      defaultProvider={chat.defaultProvider}
+      disabled={chat.isStreaming || !chat.sessionId}
+      info={chat.sessionId
+        ? `${chat.sessionId.slice(0, 8)}${chat.provider === "openrouter" ? " / OpenRouter" : ""}`
+        : "loading session..."}
+      onchange={onmodelchange}
+    />
 
     <button class="btn btn-secondary" style="width:100%" onclick={onnewchat}>
       New chat

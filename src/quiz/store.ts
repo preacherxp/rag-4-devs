@@ -35,6 +35,7 @@ export type QuizSummary = {
   id: string;
   documentId: number;
   documentLabel: string;
+  model: string;
   difficulty: string;
   numQuestions: number;
   score: number | null;
@@ -143,7 +144,7 @@ export async function getQuiz(id: string): Promise<Quiz | null> {
 
 export async function listQuizzes(): Promise<QuizSummary[]> {
   const result = await pool.query(
-    `SELECT q.id, q.document_id, q.difficulty, q.num_questions, q.score,
+    `SELECT q.id, q.document_id, q.model, q.difficulty, q.num_questions, q.score,
             q.completed_at, q.created_at, d.file_path,
             COUNT(qq.selected_answer)::integer AS answered_count
      FROM quizzes q
@@ -160,6 +161,7 @@ export async function listQuizzes(): Promise<QuizSummary[]> {
       id: row.id as string,
       documentId: row.document_id as number,
       documentLabel: label,
+      model: row.model as string,
       difficulty: row.difficulty as string,
       numQuestions: row.num_questions as number,
       score: row.score != null ? (row.score as number) : null,

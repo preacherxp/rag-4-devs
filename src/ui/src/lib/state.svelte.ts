@@ -35,4 +35,8 @@ export const quiz = $state({
   activeQuiz: null as Quiz | null,
   currentQuestionIndex: 0,
   isGenerating: false,
+  model: "",
+  provider: "openrouter",
+  defaultModel: "",
+  defaultProvider: "openrouter",
 });

@@ -1,10 +1,12 @@
 import { z } from "zod";
 import { structuredChat } from "../lmstudio/index.js";
-import { orClient } from "../llm.js";
+import { getClientForProvider } from "../llm.js";
 import { pool } from "../db/pool.js";
+import {
+  DEFAULT_CHAT_MODEL,
+  DEFAULT_CHAT_PROVIDER,
+} from "../config.js";
 import type { QuizDifficulty, AnswerLetter } from "./store.js";
-
-const QUIZ_MODEL = "openai/gpt-5.4-nano";
 
 const QuizResponseSchema = z.object({
   questions: z.array(
@@ -86,24 +88,20 @@ export async function generateQuiz(
   documentId: number,
   numQuestions: number,
   difficulty: QuizDifficulty,
+  model = DEFAULT_CHAT_MODEL,
+  provider = DEFAULT_CHAT_PROVIDER,
 ): Promise<{
   model: string;
   provider: string;
   questions: GeneratedQuestion[];
 }> {
-  if (!orClient) {
-    throw new Error(
-      "OpenRouter is not configured — required for quiz generation",
-    );
-  }
-
   const content = await getDocumentContent(documentId);
   if (!content.trim()) {
     throw new Error("Document has no indexed content");
   }
 
-  const response = await structuredChat(orClient, {
-    model: QUIZ_MODEL,
+  const response = await structuredChat(getClientForProvider(provider), {
+    model,
     messages: [
       { role: "system", content: buildSystemPrompt(numQuestions, difficulty) },
       { role: "user", content },
@@ -114,8 +112,8 @@ export async function generateQuiz(
   });
 
   return {
-    model: QUIZ_MODEL,
-    provider: "openrouter",
+    model,
+    provider,
     questions: response.questions.slice(0, numQuestions),
   };
 }

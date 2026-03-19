@@ -39,7 +39,7 @@
     </div>
   {:else}
     {#each chat.messages as msg (msg.sequence)}
-      <MessageBubble role={msg.role} content={msg.content} />
+      <MessageBubble role={msg.role} content={msg.content} model={msg.model} />
     {/each}
     {#if showTyping}
       <TypingIndicator />

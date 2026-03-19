@@ -11,6 +11,7 @@ export interface SessionSummary {
 export interface Message {
   role: "user" | "assistant";
   content: string;
+  model: string | null;
   sequence: number;
   createdAt: string;
 }
@@ -93,6 +94,7 @@ export interface QuizSummary {
   id: string;
   documentId: number;
   documentLabel: string;
+  model: string;
   difficulty: string;
   numQuestions: number;
   score: number | null;
