@@ -39,16 +39,11 @@ export async function listDocuments(): Promise<DocumentListItem[]> {
 }
 
 export async function deleteDocument(documentId: number): Promise<boolean> {
-  const result = await pool.query(
-    "DELETE FROM documents WHERE id = $1 RETURNING id",
-    [documentId],
-  );
+  const result = await pool.query("DELETE FROM documents WHERE id = $1 RETURNING id", [documentId]);
   return result.rowCount !== null && result.rowCount > 0;
 }
 
-export async function getDocumentPreview(
-  documentId: number,
-): Promise<DocumentPreview | null> {
+export async function getDocumentPreview(documentId: number): Promise<DocumentPreview | null> {
   const result = await pool.query<DocumentRow>(
     `SELECT id, file_path, updated_at
      FROM documents

@@ -16,6 +16,8 @@ AI Devs 4 RAG is a local retrieval-augmented generation tool with a Svelte UI, H
    bun install
    ```
 
+   This installs [Lefthook](https://github.com/evilmartians/lefthook) Git hooks (`pre-commit`: oxlint, `tsc` API + UI, oxfmt check). To run the same checks without staging files: `bun run precommit`. If `lefthook install` complains about `core.hooksPath` (e.g. after migrating from Husky), run `git config --unset-all core.hooksPath` and `bun install` again.
+
 2. **Start PostgreSQL with pgvector**
 
    ```bash

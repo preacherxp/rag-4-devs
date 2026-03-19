@@ -2,10 +2,7 @@ import { z } from "zod";
 import { structuredChat, structuredStreamChat } from "../lmstudio/index.js";
 import { getClientForProvider } from "../llm.js";
 import { pool } from "../db/pool.js";
-import {
-  DEFAULT_CHAT_MODEL,
-  DEFAULT_CHAT_PROVIDER,
-} from "../config.js";
+import { DEFAULT_CHAT_MODEL, DEFAULT_CHAT_PROVIDER } from "../config.js";
 import type { QuizDifficulty, AnswerLetter } from "./store.js";
 
 const QuizResponseSchema = z.object({
@@ -37,10 +34,7 @@ const DIFFICULTY_DESCRIPTIONS: Record<QuizDifficulty, string> = {
   hard: "Inference and synthesis — requires reading between the lines, applying concepts to new situations, or combining information from multiple parts of the text.",
 };
 
-function buildSystemPrompt(
-  numQuestions: number,
-  difficulty: QuizDifficulty,
-): string {
+function buildSystemPrompt(numQuestions: number, difficulty: QuizDifficulty): string {
   return `You are a quiz generator. Based on the document content provided, generate exactly ${numQuestions} multiple-choice questions.
 
 Difficulty: ${difficulty}
@@ -155,10 +149,7 @@ export async function generateQuiz(
       onToken: (token) => {
         charsReceived += token.length;
         const now = Date.now();
-        if (
-          charsReceived - lastReported >= minChars ||
-          now - lastReportTime >= minMs
-        ) {
+        if (charsReceived - lastReported >= minChars || now - lastReportTime >= minMs) {
           lastReported = charsReceived;
           lastReportTime = now;
           void emitProgress(opts?.onProgress, {

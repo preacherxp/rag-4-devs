@@ -199,10 +199,7 @@ export async function restartQuiz(id: string): Promise<boolean> {
       "UPDATE quiz_questions SET selected_answer = NULL, answered_at = NULL WHERE quiz_id = $1",
       [id],
     );
-    await client.query(
-      "UPDATE quizzes SET score = NULL, completed_at = NULL WHERE id = $1",
-      [id],
-    );
+    await client.query("UPDATE quizzes SET score = NULL, completed_at = NULL WHERE id = $1", [id]);
     await client.query("COMMIT");
     return true;
   } catch (error) {
@@ -221,10 +218,10 @@ export async function completeQuiz(id: string): Promise<Quiz | null> {
   );
   const score = scoreResult.rows[0]?.score as number;
 
-  await pool.query(
-    "UPDATE quizzes SET score = $2, completed_at = now() WHERE id = $1",
-    [id, score],
-  );
+  await pool.query("UPDATE quizzes SET score = $2, completed_at = now() WHERE id = $1", [
+    id,
+    score,
+  ]);
 
   return getQuiz(id);
 }

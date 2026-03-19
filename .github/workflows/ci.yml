@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies (root)
+        run: bun install --frozen-lockfile
+
+      - name: Install dependencies (UI)
+        working-directory: src/ui
+        run: bun install --frozen-lockfile
+
+      - name: Lint (oxlint)
+        run: bun run lint
+
+      - name: Format check (oxfmt)
+        run: bun run format:check
+
+      - name: Typecheck API
+        run: bun run check
+
+      - name: Typecheck UI
+        run: bun run check:ui
+
+      - name: Test
+        run: bun test
+
+      - name: Build UI
+        run: bun run build:ui
+
+      - name: Upload UI dist
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-dist
+          path: src/ui/dist/
+          if-no-files-found: error

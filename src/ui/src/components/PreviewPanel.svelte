@@ -290,6 +290,14 @@
     }
   }
 
+  $effect(() => {
+    const el = previewContentEl;
+    if (!el) return;
+    const handler = (e: MouseEvent) => handleImageClick(e);
+    el.addEventListener("click", handler);
+    return () => el.removeEventListener("click", handler);
+  });
+
   // Resize logic
   function handleResizeMousedown(e: MouseEvent) {
     const handle = (e.target as HTMLElement).closest(
@@ -338,13 +346,14 @@
   const savedWidth = rawSaved && parseInt(rawSaved) >= 860 ? rawSaved : "";
 </script>
 
-<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 {#if ui.previewOpen}
-  <div
+  <button
+    type="button"
     class="preview-overlay"
     class:hidden={ui.previewFullscreen}
     onclick={close}
-  ></div>
+    aria-label="Close preview"
+  ></button>
 {/if}
 
 <section
@@ -426,14 +435,8 @@
     </div>
   </div>
 
-  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
   <div class="preview-shell" bind:this={previewShellEl}>
-    <div
-      class="preview-body"
-      bind:this={previewBodyEl}
-      onclick={handleImageClick}
-      onmousedown={handleResizeMousedown}
-    >
+    <div class="preview-body" bind:this={previewBodyEl}>
       {#if loading}
         <div class="empty-state" style="padding:24px;font-size:13px;">
           Fetching document...
@@ -502,10 +505,15 @@
           {/if}
           <div class="preview-main-col">
         <div class="preview-card-wrapper">
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <div class="preview-resize-handle left" data-resize="left">
+          <button
+            type="button"
+            class="preview-resize-handle left"
+            data-resize="left"
+            onmousedown={handleResizeMousedown}
+            aria-label="Resize preview panel"
+          >
             <div class="preview-resize-grip"></div>
-          </div>
+          </button>
           <article class="preview-card" style:max-width={savedWidth}>
             <section class="preview-frontmatter">
               <h3>{p.title}</h3>
@@ -533,10 +541,15 @@
               {@html p.bodyHtml}
             </div>
           </article>
-          <!-- svelte-ignore a11y_no_static_element_interactions -->
-          <div class="preview-resize-handle right" data-resize="right">
+          <button
+            type="button"
+            class="preview-resize-handle right"
+            data-resize="right"
+            onmousedown={handleResizeMousedown}
+            aria-label="Resize preview panel"
+          >
             <div class="preview-resize-grip"></div>
-          </div>
+          </button>
         </div>
           </div>
         </div>
@@ -568,9 +581,17 @@
   .preview-overlay {
     position: fixed;
     inset: 0;
+    display: block;
+    margin: 0;
+    padding: 0;
+    border: none;
+    appearance: none;
     background: rgba(12, 10, 9, 0.5);
     z-index: 90;
     transition: opacity var(--transition);
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
   }
 
   .preview-overlay.hidden {
@@ -986,9 +1007,16 @@
     position: sticky;
     top: calc(50vh - 24px);
     z-index: 10;
+    box-sizing: border-box;
     width: 16px;
     height: 48px;
     margin: 0 24px;
+    padding: 0;
+    border: none;
+    appearance: none;
+    background: transparent;
+    font: inherit;
+    color: inherit;
     cursor: col-resize;
     display: flex;
     align-items: center;

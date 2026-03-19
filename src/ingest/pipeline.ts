@@ -5,11 +5,7 @@ import { config } from "../config.js";
 import { chunkMarkdown } from "./chunker.js";
 import { embedBatch } from "../lmstudio/index.js";
 import { getClientForProvider } from "../llm.js";
-import {
-  isPathWithinDir,
-  listMarkdownFiles,
-  resolveRagDir,
-} from "../documents/paths.js";
+import { isPathWithinDir, listMarkdownFiles, resolveRagDir } from "../documents/paths.js";
 
 function sha256(content: string): string {
   return createHash("sha256").update(content).digest("hex");
@@ -24,10 +20,9 @@ async function indexFile(filePath: string, content: string): Promise<boolean> {
   const checksum = sha256(content);
 
   // Check if already indexed with same checksum
-  const existing = await pool.query(
-    "SELECT id, checksum FROM documents WHERE file_path = $1",
-    [filePath],
-  );
+  const existing = await pool.query("SELECT id, checksum FROM documents WHERE file_path = $1", [
+    filePath,
+  ]);
 
   if (existing.rows[0]?.checksum === checksum) {
     return false;
@@ -70,13 +65,7 @@ async function indexFile(filePath: string, content: string): Promise<boolean> {
       await client.query(
         `INSERT INTO chunks (document_id, chunk_index, heading, content, embedding)
          VALUES ($1, $2, $3, $4, $5)`,
-        [
-          docId,
-          chunk.chunkIndex,
-          chunk.heading,
-          chunk.content,
-          toSqlVector(embedding),
-        ],
+        [docId, chunk.chunkIndex, chunk.heading, chunk.content, toSqlVector(embedding)],
       );
     }
 
@@ -109,9 +98,7 @@ export async function indexAll(): Promise<{
     else skipped++;
   }
 
-  const documents = await pool.query<{ file_path: string }>(
-    "SELECT file_path FROM documents",
-  );
+  const documents = await pool.query<{ file_path: string }>("SELECT file_path FROM documents");
   let removed = 0;
 
   for (const row of documents.rows) {

@@ -52,11 +52,7 @@ export function deleteSession(id: string): Promise<{ ok: boolean }> {
   return json(`/api/chat/sessions/${id}`, { method: "DELETE" });
 }
 
-export function patchSessionModel(
-  id: string,
-  model: string,
-  provider: string,
-): Promise<Session> {
+export function patchSessionModel(id: string, model: string, provider: string): Promise<Session> {
   return json(`/api/chat/sessions/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },

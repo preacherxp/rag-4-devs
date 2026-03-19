@@ -1,10 +1,6 @@
 import { existsSync, statSync, watch, type FSWatcher } from "node:fs";
 import { relative, resolve } from "node:path";
-import {
-  isMarkdownFile,
-  isPathWithinDir,
-  listRagDirectories,
-} from "../documents/paths.js";
+import { isMarkdownFile, isPathWithinDir, listRagDirectories } from "../documents/paths.js";
 import { indexAll, indexSingleFile, removeFile } from "./pipeline.js";
 
 /**
@@ -70,31 +66,20 @@ export function watchRagDir(ragDir: string): void {
         fileTimers.delete(filePath);
         try {
           if (existsSync(filePath)) {
-            console.log(
-              `[watcher] Re-indexing ${relative(dir, filePath) || filePath}`,
-            );
+            console.log(`[watcher] Re-indexing ${relative(dir, filePath) || filePath}`);
             await indexSingleFile(filePath);
           } else {
-            console.log(
-              `[watcher] File removed ${relative(dir, filePath) || filePath}`,
-            );
+            console.log(`[watcher] File removed ${relative(dir, filePath) || filePath}`);
             await removeFile(filePath);
           }
         } catch (err) {
-          console.error(
-            `[watcher] Error processing ${relative(dir, filePath) || filePath}:`,
-            err,
-          );
+          console.error(`[watcher] Error processing ${relative(dir, filePath) || filePath}:`, err);
         }
       }, 500),
     );
   };
 
-  const handleEvent = (
-    eventType: string,
-    watchedDir: string,
-    filename: string | Buffer | null,
-  ) => {
+  const handleEvent = (eventType: string, watchedDir: string, filename: string | Buffer | null) => {
     if (!filename) {
       scheduleFullSync(`unknown change in ${relative(dir, watchedDir) || "."}`);
       return;

@@ -53,28 +53,16 @@ export function prettyPathSegment(seg: string): string {
   if (ep) {
     const season = ep[1].padStart(2, "0");
     const episode = ep[2].padStart(2, "0");
-    const slug = ep[3]
-      .replace(/[_-]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
+    const slug = ep[3].replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
     const title = slug ? titleCaseWords(slug) : "";
     return title ? `S${season}E${episode} · ${title}` : `S${season}E${episode}`;
   }
-  return titleCaseWords(
-    rest
-      .replace(/[_-]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim(),
-  );
+  return titleCaseWords(rest.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim());
 }
 
 export function prettyDocumentLabel(label: string): string {
   if (!label.trim()) return "";
-  return label
-    .split("/")
-    .map(prettyPathSegment)
-    .filter(Boolean)
-    .join(" › ");
+  return label.split("/").map(prettyPathSegment).filter(Boolean).join(" › ");
 }
 
 export function prettyPreviewTitle(label: string): string {

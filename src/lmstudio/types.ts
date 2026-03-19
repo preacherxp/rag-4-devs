@@ -21,7 +21,10 @@ export type ChatOptions = {
   responseFormat?:
     | { type: "text" }
     | { type: "json_object" }
-    | { type: "json_schema"; json_schema: { name: string; strict?: boolean; schema: Record<string, unknown> } }
+    | {
+        type: "json_schema";
+        json_schema: { name: string; strict?: boolean; schema: Record<string, unknown> };
+      }
     | undefined;
   stop?: string[] | undefined;
   signal?: AbortSignal | undefined;
