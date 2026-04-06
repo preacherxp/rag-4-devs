@@ -32,6 +32,14 @@ AI Devs 4 RAG is a local retrieval-augmented generation tool with a Svelte UI, H
 
    Edit `.env` and set your `OPENROUTER_API_KEY`. Other defaults work out of the box with the Docker setup (note: Docker exposes Postgres on port **5433**, so update `DATABASE_URL` accordingly if needed).
 
+   If you need detailed model/debug traces for quiz generation, set:
+
+   ```
+   LOG_LEVEL=debug
+   ```
+
+   Quiz logs include a `requestId`, selected `provider`/`model`, retry attempts, quality-check failures, and structured-output parsing/schema failures with a preview of the raw model response.
+
 4. **Add documents** to the `rag/` directory (configured via `RAG_DIR` in `.env`). Markdown files anywhere under that directory are ingested recursively and indexed for search.
 
 5. **(Optional) Use LM Studio** instead of OpenRouter for local embeddings

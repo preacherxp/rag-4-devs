@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { streamSSE } from "hono/streaming";
+import { randomUUID } from "node:crypto";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { DEFAULT_CHAT_MODEL, DEFAULT_CHAT_PROVIDER } from "./config.js";
@@ -28,9 +29,11 @@ import {
   completeQuiz,
 } from "./quiz/store.js";
 import { generateQuiz, type QuizGenProgress } from "./quiz/generate.js";
+import { createLogger } from "./logger.js";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export const app = new Hono();
+const quizApiLogger = createLogger("quiz-api");
 
 // Chat endpoint with SSE streaming
 app.post("/api/chat", async (c) => {
@@ -276,6 +279,7 @@ app.post("/api/quizzes", async (c) => {
     difficulty?: string;
     model?: string;
     provider?: string;
+    language?: string;
   }>();
 
   const documentId = body.documentId;
@@ -295,6 +299,19 @@ app.post("/api/quizzes", async (c) => {
 
   const model = body.model?.trim() || undefined;
   const provider = body.provider?.trim() || undefined;
+  const language = body.language?.trim() || undefined;
+  const requestId = randomUUID();
+  const startedAt = Date.now();
+
+  quizApiLogger.info("quiz_request_started", {
+    requestId,
+    mode: "http",
+    documentId,
+    numQuestions,
+    difficulty,
+    model: model ?? DEFAULT_CHAT_MODEL,
+    provider: provider ?? DEFAULT_CHAT_PROVIDER,
+  });
 
   try {
     const generated = await generateQuiz(
@@ -303,6 +320,7 @@ app.post("/api/quizzes", async (c) => {
       difficulty as "easy" | "medium" | "hard",
       model,
       provider,
+      { requestId, ...(language ? { language } : {}) },
     );
     const quiz = await createQuizInDb(
       documentId,
@@ -311,9 +329,24 @@ app.post("/api/quizzes", async (c) => {
       generated.provider,
       generated.questions,
     );
+    quizApiLogger.info("quiz_request_succeeded", {
+      requestId,
+      mode: "http",
+      quizId: quiz.id,
+      elapsedMs: Date.now() - startedAt,
+      questionCount: generated.questions.length,
+      model: generated.model,
+      provider: generated.provider,
+    });
     return c.json(quiz, 201);
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Quiz generation failed";
+    quizApiLogger.error("quiz_request_failed", {
+      requestId,
+      mode: "http",
+      elapsedMs: Date.now() - startedAt,
+      error: err,
+    });
     return c.json({ error: msg }, 500);
   }
 });
@@ -325,6 +358,7 @@ app.post("/api/quizzes/stream", async (c) => {
     difficulty?: string;
     model?: string;
     provider?: string;
+    language?: string;
   }>();
 
   const documentId = body.documentId;
@@ -344,9 +378,22 @@ app.post("/api/quizzes/stream", async (c) => {
 
   const model = body.model?.trim() || undefined;
   const provider = body.provider?.trim() || undefined;
+  const language = body.language?.trim() || undefined;
   const upstreamSignal = c.req.raw.signal;
+  const requestId = randomUUID();
+  const startedAt = Date.now();
 
   return streamSSE(c, async (stream) => {
+    quizApiLogger.info("quiz_request_started", {
+      requestId,
+      mode: "sse",
+      documentId,
+      numQuestions,
+      difficulty,
+      model: model ?? DEFAULT_CHAT_MODEL,
+      provider: provider ?? DEFAULT_CHAT_PROVIDER,
+    });
+
     const writeProgress = async (p: QuizGenProgress) => {
       await stream.writeSSE({
         event: "progress",
@@ -361,7 +408,12 @@ app.post("/api/quizzes/stream", async (c) => {
         difficulty as "easy" | "medium" | "hard",
         model,
         provider,
-        { onProgress: writeProgress, signal: upstreamSignal },
+        {
+          requestId,
+          ...(language ? { language } : {}),
+          onProgress: writeProgress,
+          signal: upstreamSignal,
+        },
       );
       await writeProgress({ phase: "saving" });
       const quiz = await createQuizInDb(
@@ -375,12 +427,32 @@ app.post("/api/quizzes/stream", async (c) => {
         event: "quiz",
         data: JSON.stringify(quiz),
       });
+      quizApiLogger.info("quiz_request_succeeded", {
+        requestId,
+        mode: "sse",
+        quizId: quiz.id,
+        elapsedMs: Date.now() - startedAt,
+        questionCount: generated.questions.length,
+        model: generated.model,
+        provider: generated.provider,
+      });
       await stream.writeSSE({ data: "[DONE]" });
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
+        quizApiLogger.info("quiz_request_aborted", {
+          requestId,
+          mode: "sse",
+          elapsedMs: Date.now() - startedAt,
+        });
         return;
       }
       const msg = err instanceof Error ? err.message : "Quiz generation failed";
+      quizApiLogger.error("quiz_request_failed", {
+        requestId,
+        mode: "sse",
+        elapsedMs: Date.now() - startedAt,
+        error: err,
+      });
       try {
         await stream.writeSSE({ data: `[ERROR] ${msg}` });
       } catch {

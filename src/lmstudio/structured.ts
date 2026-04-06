@@ -11,6 +11,48 @@ export type StructuredChatOptions<T extends z.ZodType> = {
   maxTokens?: number | undefined;
 };
 
+export class StructuredChatError extends Error {
+  readonly stage: "parse" | "schema";
+  readonly rawText: string;
+
+  constructor(
+    stage: "parse" | "schema",
+    message: string,
+    rawText: string,
+    options?: { cause?: unknown },
+  ) {
+    super(message);
+    this.name = "StructuredChatError";
+    this.stage = stage;
+    this.rawText = rawText;
+    if (options?.cause !== undefined) {
+      (this as Error & { cause?: unknown }).cause = options.cause;
+    }
+  }
+}
+
+function parseStructuredResponse<T extends z.ZodType>(rawText: string, schema: T): z.infer<T> {
+  let parsed: unknown;
+  try {
+    parsed = parseJsonWithRepair(rawText);
+  } catch (error) {
+    throw new StructuredChatError("parse", "Failed to parse structured model response", rawText, {
+      cause: error,
+    });
+  }
+
+  try {
+    return schema.parse(parsed) as z.infer<T>;
+  } catch (error) {
+    throw new StructuredChatError(
+      "schema",
+      "Structured model response did not match the expected schema",
+      rawText,
+      { cause: error },
+    );
+  }
+}
+
 export async function structuredChat<T extends z.ZodType>(
   client: LmStudioClient,
   options: StructuredChatOptions<T>,
@@ -30,8 +72,7 @@ export async function structuredChat<T extends z.ZodType>(
     maxTokens: options.maxTokens,
   });
 
-  const parsed = parseJsonWithRepair(text);
-  return options.schema.parse(parsed) as z.infer<T>;
+  return parseStructuredResponse(text, options.schema);
 }
 
 export async function structuredStreamChat<T extends z.ZodType>(
@@ -65,6 +106,5 @@ export async function structuredStreamChat<T extends z.ZodType>(
   if (options.onStreamComplete) {
     await Promise.resolve(options.onStreamComplete());
   }
-  const parsed = parseJsonWithRepair(buffer);
-  return options.schema.parse(parsed) as z.infer<T>;
+  return parseStructuredResponse(buffer, options.schema);
 }

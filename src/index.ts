@@ -5,8 +5,10 @@ import { indexAll } from "./ingest/pipeline.js";
 import { watchRagDir } from "./ingest/watcher.js";
 import { app } from "./server.js";
 import { pool } from "./db/pool.js";
+import { configureLogger } from "./logger.js";
 
 async function main() {
+  configureLogger(config.LOG_LEVEL);
   console.log("[rag] Starting...");
 
   // 1. Run migrations

@@ -88,6 +88,7 @@ export function createQuiz(opts: {
   difficulty: string;
   model: string;
   provider: string;
+  language?: string;
 }): Promise<Quiz> {
   return json("/api/quizzes", {
     method: "POST",
@@ -103,6 +104,7 @@ export async function* streamCreateQuiz(
     difficulty: string;
     model: string;
     provider: string;
+    language?: string;
   },
   options?: { signal?: AbortSignal },
 ): AsyncGenerator<QuizGenStreamEvent> {

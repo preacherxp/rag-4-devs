@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import { chat, docs, ui, quiz } from "./lib/state.svelte";
   import {
     fetchStatus,
@@ -19,6 +19,10 @@
   } from "./lib/api";
   import type { Source } from "./lib/types";
   import { parseModelValue } from "./lib/utils";
+  import {
+    clearDocumentScrollPosition,
+    getDocumentScrollKey,
+  } from "./lib/previewState";
   import Sidebar from "./components/Sidebar.svelte";
   import ChatArea from "./components/ChatArea.svelte";
   import InputArea from "./components/InputArea.svelte";
@@ -275,11 +279,15 @@
     if (!confirm("Remove this document from the index?")) return;
     try {
       await apiDeleteDoc(id);
+      const deletedDoc = docs.list.find((doc) => doc.id === id) ?? null;
+      const scrollKey = getDocumentScrollKey(deletedDoc);
       docs.list = docs.list.filter((d) => d.id !== id);
       if (id === docs.selectedId) {
         docs.selectedId = null;
         ui.previewOpen = false;
+        await tick();
       }
+      clearDocumentScrollPosition(scrollKey);
       if (id === docs.focusedId) docs.focusedId = null;
       // Refresh status
       try {

@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { marked } from "marked";
+  import { parseMarkdown, isHighlighterReady } from "../lib/markdown.svelte";
   import SourcesList from "./SourcesList.svelte";
   import type { Source } from "../lib/types";
+  import { ui } from "../lib/state.svelte";
 
   let { role, content, model = null, sources = [] }: {
     role: "user" | "assistant" | "error";
@@ -10,11 +11,16 @@
     sources?: Source[];
   } = $props();
 
-  marked.setOptions({ breaks: true });
-
   const rendered = $derived(
-    role === "assistant" ? marked.parse(content) as string : ""
+    role === "assistant" ? (isHighlighterReady(), parseMarkdown(content)) : ""
   );
+
+  function handleClick(e: MouseEvent) {
+    const target = e.target as HTMLElement;
+    if (target.tagName === "IMG" && (target as HTMLImageElement).src) {
+      ui.lightboxSrc = (target as HTMLImageElement).src;
+    }
+  }
 </script>
 
 <div class="msg-wrapper {role}">
@@ -29,7 +35,8 @@
       </svg>
     {/if}
   </div>
-  <div class="msg {role} markdown-content">
+  <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+  <div class="msg {role} markdown-content" onclick={handleClick}>
     {#if role === "user" || role === "error"}
       {content}
     {:else}

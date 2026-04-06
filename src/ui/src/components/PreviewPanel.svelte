@@ -1,9 +1,15 @@
 <script lang="ts">
   import { tick } from "svelte";
-  import { marked } from "marked";
+  import { parseMarkdown, isHighlighterReady } from "../lib/markdown.svelte";
   import { ui, docs } from "../lib/state.svelte";
   import { fetchDocument, deleteDocument as apiDeleteDoc } from "../lib/api";
   import type { DocumentPreview } from "../lib/types";
+  import {
+    clearDocumentScrollPosition,
+    getDocumentScrollKey,
+    readDocumentScrollPosition,
+    saveDocumentScrollPosition,
+  } from "../lib/previewState";
   import {
     extractTocFromMarkdown,
     prettyPreviewTitle,
@@ -26,14 +32,51 @@
   let readProgress = $state(0);
   let activeTocSlug = $state<string | null>(null);
   let tocSideOpen = $state(false);
+  let pendingScrollRestoreKey = $state<string | null>(null);
+  let persistScrollTimer: ReturnType<typeof setTimeout> | null = null;
+  let loadRequestSeq = 0;
+
+  const SCROLL_RESTORE_TIMEOUT_MS = 2500;
+
+  interface ActiveScrollRestore {
+    key: string;
+    top: number;
+    expiresAt: number;
+  }
+
+  let activeScrollRestore: ActiveScrollRestore | null = null;
+
+  const PREVIEW_FONT_SIZE_KEY = "preview-font-size";
+  const PREVIEW_FONT_MIN = 13;
+  const PREVIEW_FONT_MAX = 22;
+  const PREVIEW_FONT_DEFAULT = 15;
+
+  function clampPreviewFontSize(value: number) {
+    return Math.min(
+      PREVIEW_FONT_MAX,
+      Math.max(PREVIEW_FONT_MIN, Math.round(value)),
+    );
+  }
+
+  function readSavedPreviewFontSize() {
+    if (typeof localStorage === "undefined") return PREVIEW_FONT_DEFAULT;
+    const raw = Number(localStorage.getItem(PREVIEW_FONT_SIZE_KEY));
+    if (!Number.isFinite(raw)) return PREVIEW_FONT_DEFAULT;
+    return clampPreviewFontSize(raw);
+  }
+
+  let previewFontSize = $state(readSavedPreviewFontSize());
 
   // Load document when selectedId changes
   $effect(() => {
     const id = docs.selectedId;
     if (id == null) {
+      loading = false;
       doc = null;
       error = null;
       tocSideOpen = false;
+      pendingScrollRestoreKey = null;
+      activeScrollRestore = null;
       return;
     }
     tocSideOpen = false;
@@ -41,25 +84,23 @@
   });
 
   async function loadDoc(id: number) {
+    const requestSeq = ++loadRequestSeq;
     loading = true;
     error = null;
     try {
-      doc = await fetchDocument(id);
+      const nextDoc = await fetchDocument(id);
+      if (requestSeq !== loadRequestSeq || docs.selectedId !== id) return;
+      doc = nextDoc;
+      pendingScrollRestoreKey = getDocumentScrollKey(nextDoc);
     } catch (e) {
+      if (requestSeq !== loadRequestSeq || docs.selectedId !== id) return;
       error = e instanceof Error ? e.message : "Failed to load document";
       doc = null;
+      pendingScrollRestoreKey = null;
     } finally {
-      loading = false;
+      if (requestSeq !== loadRequestSeq || docs.selectedId !== id)
+        loading = false;
     }
-  }
-
-  function escapeHtml(s: string) {
-    return String(s)
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
   }
 
   function parseFrontmatter(content: string) {
@@ -116,11 +157,12 @@
     return value;
   }
 
-  const parsed = $derived(() => {
+  const parsed = $derived.by(() => {
     if (!doc) return null;
     const { metadata, body } = parseFrontmatter(doc.content);
     const normalizedBody = normalizeMarkdown(body || doc.content);
-    const bodyHtml = marked.parse(normalizedBody) as string;
+    isHighlighterReady();
+    const bodyHtml = parseMarkdown(normalizedBody);
     const toc = extractTocFromMarkdown(normalizedBody);
     const entries = Object.entries(metadata).filter(
       ([k]) => k !== "title" && k !== "cover_image",
@@ -141,7 +183,102 @@
     if (!shell) return;
     const max = shell.scrollHeight - shell.clientHeight;
     readProgress =
-      max <= 0 ? 100 : Math.min(100, Math.max(0, (100 * shell.scrollTop) / max));
+      max <= 0
+        ? 100
+        : Math.min(100, Math.max(0, (100 * shell.scrollTop) / max));
+  }
+
+  function getScrollSnapshot(shell: HTMLDivElement) {
+    const max = Math.max(0, shell.scrollHeight - shell.clientHeight);
+    return {
+      top: shell.scrollTop,
+      progress: max <= 0 ? 0 : shell.scrollTop / max,
+    };
+  }
+
+  function persistShellScrollPosition(
+    scrollKey: string | null,
+    shell: HTMLDivElement | undefined,
+  ) {
+    if (!scrollKey || !shell) return;
+    saveDocumentScrollPosition(scrollKey, getScrollSnapshot(shell));
+  }
+
+  function shouldDeferScrollPersistence(scrollKey: string | null) {
+    if (!scrollKey) return true;
+    if (pendingScrollRestoreKey === scrollKey) return true;
+    if (activeScrollRestore?.key === scrollKey) return true;
+    return false;
+  }
+
+  function queuePersistCurrentScroll(scrollKey: string | null) {
+    if (shouldDeferScrollPersistence(scrollKey)) return;
+    if (persistScrollTimer) clearTimeout(persistScrollTimer);
+    persistScrollTimer = setTimeout(() => {
+      persistScrollTimer = null;
+      if (shouldDeferScrollPersistence(scrollKey)) return;
+      persistShellScrollPosition(scrollKey, previewShellEl);
+    }, 120);
+  }
+
+  function cancelActiveScrollRestore(scrollKey?: string | null) {
+    if (!activeScrollRestore) return;
+    if (scrollKey && activeScrollRestore.key !== scrollKey) return;
+    activeScrollRestore = null;
+  }
+
+  function isActiveScrollRestoreFor(scrollKey: string | null) {
+    return !!(scrollKey && activeScrollRestore?.key === scrollKey);
+  }
+
+  function applyActiveScrollRestore() {
+    const shell = previewShellEl;
+    const restore = activeScrollRestore;
+    if (!shell || !restore) return;
+
+    const currentKey = getDocumentScrollKey(doc);
+    if (!currentKey || currentKey !== restore.key) {
+      activeScrollRestore = null;
+      return;
+    }
+
+    const max = Math.max(0, shell.scrollHeight - shell.clientHeight);
+    const targetTop = Math.max(0, restore.top);
+    shell.scrollTop = Math.min(targetTop, max);
+
+    if (
+      max >= targetTop - 0.5 &&
+      Math.abs(shell.scrollTop - targetTop) <= 0.5
+    ) {
+      activeScrollRestore = null;
+      updateReadProgress();
+      updateActiveHeading();
+      return;
+    }
+
+    if (Date.now() >= restore.expiresAt) {
+      activeScrollRestore = null;
+    }
+  }
+
+  function startScrollRestore(scrollKey: string) {
+    const shell = previewShellEl;
+    if (!shell) return;
+
+    const saved = readDocumentScrollPosition(scrollKey);
+    if (!saved) {
+      activeScrollRestore = null;
+      shell.scrollTop = 0;
+      return;
+    }
+
+    activeScrollRestore = {
+      key: scrollKey,
+      top: Math.max(0, saved.top),
+      expiresAt: Date.now() + SCROLL_RESTORE_TIMEOUT_MS,
+    };
+    applyActiveScrollRestore();
+    requestAnimationFrame(() => applyActiveScrollRestore());
   }
 
   function updateActiveHeading() {
@@ -185,15 +322,7 @@
   }
 
   $effect(() => {
-    const id = docs.selectedId;
-    const shell = previewShellEl;
-    if (id == null || !shell) return;
-    shell.scrollTop = 0;
-    readProgress = 0;
-  });
-
-  $effect(() => {
-    const p = parsed();
+    const p = parsed;
     if (!p || loading || error || !previewContentEl) return;
 
     void p.bodyHtml;
@@ -204,7 +333,7 @@
       if (
         !previewContentEl ||
         doc?.id !== expectDocId ||
-        parsed()?.bodyHtml !== bodySnapshot
+        parsed?.bodyHtml !== bodySnapshot
       ) {
         return;
       }
@@ -221,6 +350,15 @@
             : slugifyWithDedup(h.textContent || "section", used);
         i += 1;
       }
+      const scrollKey = getDocumentScrollKey(doc);
+      if (
+        pendingScrollRestoreKey &&
+        scrollKey &&
+        scrollKey === pendingScrollRestoreKey
+      ) {
+        startScrollRestore(scrollKey);
+        pendingScrollRestoreKey = null;
+      }
       updateReadProgress();
       updateActiveHeading();
     });
@@ -229,27 +367,59 @@
   $effect(() => {
     if (!ui.previewOpen) return;
     const shell = previewShellEl;
+    const scrollKey = getDocumentScrollKey(doc);
     if (!shell) return;
 
+    let headingRafPending = false;
     const onScroll = () => {
+      applyActiveScrollRestore();
+      updateReadProgress();
+      if (!headingRafPending) {
+        headingRafPending = true;
+        requestAnimationFrame(() => {
+          headingRafPending = false;
+          updateActiveHeading();
+        });
+      }
+      queuePersistCurrentScroll(scrollKey);
+    };
+
+    const handleLayoutChange = () => {
+      applyActiveScrollRestore();
       updateReadProgress();
       updateActiveHeading();
     };
 
-    const ro = new ResizeObserver(() => {
-      updateReadProgress();
-      updateActiveHeading();
-    });
+    const ro = new ResizeObserver(handleLayoutChange);
     ro.observe(shell);
+    if (previewContentEl) ro.observe(previewContentEl);
+
+    const onUserIntent = () => cancelActiveScrollRestore(scrollKey);
 
     shell.addEventListener("scroll", onScroll, { passive: true });
-    window.addEventListener("resize", onScroll, { passive: true });
-    onScroll();
+    shell.addEventListener("wheel", onUserIntent, { passive: true });
+    shell.addEventListener("touchstart", onUserIntent, { passive: true });
+    shell.addEventListener("pointerdown", onUserIntent, { passive: true });
+    window.addEventListener("resize", handleLayoutChange, { passive: true });
+    handleLayoutChange();
 
     return () => {
+      if (persistScrollTimer) {
+        clearTimeout(persistScrollTimer);
+        persistScrollTimer = null;
+      }
+      const restoring = isActiveScrollRestoreFor(scrollKey);
+      const pendingRestore = pendingScrollRestoreKey === scrollKey;
+      cancelActiveScrollRestore(scrollKey);
+      if (!restoring && !pendingRestore) {
+        persistShellScrollPosition(scrollKey, shell);
+      }
       ro.disconnect();
       shell.removeEventListener("scroll", onScroll);
-      window.removeEventListener("resize", onScroll);
+      shell.removeEventListener("wheel", onUserIntent);
+      shell.removeEventListener("touchstart", onUserIntent);
+      shell.removeEventListener("pointerdown", onUserIntent);
+      window.removeEventListener("resize", handleLayoutChange);
     };
   });
 
@@ -270,14 +440,24 @@
     onnavchange(docs.selectedId, ui.previewFullscreen);
   }
 
+  function setPreviewFontSize(next: number) {
+    previewFontSize = clampPreviewFontSize(next);
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(PREVIEW_FONT_SIZE_KEY, String(previewFontSize));
+    }
+  }
+
   async function handleDelete() {
     if (docs.selectedId == null) return;
     if (!confirm("Remove this document from the index?")) return;
     try {
+      const scrollKey = getDocumentScrollKey(doc);
       await apiDeleteDoc(docs.selectedId);
       docs.list = docs.list.filter((d) => d.id !== docs.selectedId);
       if (docs.selectedId === docs.focusedId) docs.focusedId = null;
       close();
+      await tick();
+      clearDocumentScrollPosition(scrollKey);
     } catch {
       /* ignore */
     }
@@ -315,8 +495,6 @@
     const startX = e.clientX;
     const startWidth = card.getBoundingClientRect().width;
     const side = handle.dataset.resize;
-    let resizing = true;
-
     const onMouseMove = (ev: MouseEvent) => {
       const dx = side === "right" ? ev.clientX - startX : startX - ev.clientX;
       const newWidth = Math.max(280, startWidth + dx * 2);
@@ -325,7 +503,6 @@
     };
 
     const onMouseUp = () => {
-      resizing = false;
       document.body.style.cursor = "";
       if (card)
         localStorage.setItem("preview-content-width", card.style.maxWidth);
@@ -378,59 +555,90 @@
         </div>
       </div>
       <div class="preview-actions">
-      <button
-        class="preview-action-btn"
-        title="Remove document"
-        style="color:var(--rose);"
-        onclick={handleDelete}
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          style="width:16px;height:16px;"
+        <div class="preview-font-controls" aria-label="Markdown font size">
+          <button
+            type="button"
+            class="preview-font-btn"
+            title="Decrease font size"
+            aria-label="Decrease markdown font size"
+            onclick={() => setPreviewFontSize(previewFontSize - 1)}
+            disabled={previewFontSize <= PREVIEW_FONT_MIN}
+          >
+            A-
+          </button>
+          <button
+            type="button"
+            class="preview-font-readout"
+            title="Reset font size"
+            aria-label="Reset markdown font size"
+            onclick={() => setPreviewFontSize(PREVIEW_FONT_DEFAULT)}
+          >
+            {previewFontSize}px
+          </button>
+          <button
+            type="button"
+            class="preview-font-btn"
+            title="Increase font size"
+            aria-label="Increase markdown font size"
+            onclick={() => setPreviewFontSize(previewFontSize + 1)}
+            disabled={previewFontSize >= PREVIEW_FONT_MAX}
+          >
+            A+
+          </button>
+        </div>
+        <button
+          class="preview-action-btn"
+          title="Remove document"
+          style="color:var(--rose);"
+          onclick={handleDelete}
         >
-          <polyline points="3 6 5 6 21 6"></polyline>
-          <path
-            d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
-          ></path>
-        </svg>
-      </button>
-      <button
-        class="preview-fullscreen"
-        title="Toggle fullscreen"
-        onclick={toggleFullscreen}
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            style="width:16px;height:16px;"
+          >
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path
+              d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"
+            ></path>
+          </svg>
+        </button>
+        <button
+          class="preview-fullscreen"
+          title="Toggle fullscreen"
+          onclick={toggleFullscreen}
         >
-          <polyline points="15 3 21 3 21 9"></polyline>
-          <polyline points="9 21 3 21 3 15"></polyline>
-          <line x1="21" y1="3" x2="14" y2="10"></line>
-          <line x1="3" y1="21" x2="10" y2="14"></line>
-        </svg>
-      </button>
-      <button class="preview-close" title="Close preview" onclick={close}>
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-      </button>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <polyline points="15 3 21 3 21 9"></polyline>
+            <polyline points="9 21 3 21 3 15"></polyline>
+            <line x1="21" y1="3" x2="14" y2="10"></line>
+            <line x1="3" y1="21" x2="10" y2="14"></line>
+          </svg>
+        </button>
+        <button class="preview-close" title="Close preview" onclick={close}>
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
       </div>
     </div>
   </div>
@@ -445,14 +653,11 @@
         <div class="empty-state" style="padding:24px;font-size:13px;">
           {error}
         </div>
-      {:else if parsed()}
-        {@const p = parsed()!}
+      {:else if parsed}
+        {@const p = parsed}
         <div class="preview-shell-inner">
           {#if p.toc.length > 0}
-            <div
-              class="preview-toc-rail"
-              class:open={tocSideOpen}
-            >
+            <div class="preview-toc-rail" class:open={tocSideOpen}>
               <aside
                 id="preview-toc-panel"
                 class="preview-toc-panel"
@@ -490,13 +695,15 @@
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
-                    stroke-width="2"
+                    stroke-width="2.35"
                     stroke-linecap="round"
                     stroke-linejoin="round"
                     aria-hidden="true"
                   >
                     <polyline
-                      points={tocSideOpen ? "15 18 9 12 15 6" : "9 18 15 12 9 6"}
+                      points={tocSideOpen
+                        ? "15 18 9 12 15 6"
+                        : "9 18 15 12 9 6"}
                     ></polyline>
                   </svg>
                 </button>
@@ -504,53 +711,59 @@
             </div>
           {/if}
           <div class="preview-main-col">
-        <div class="preview-card-wrapper">
-          <button
-            type="button"
-            class="preview-resize-handle left"
-            data-resize="left"
-            onmousedown={handleResizeMousedown}
-            aria-label="Resize preview panel"
-          >
-            <div class="preview-resize-grip"></div>
-          </button>
-          <article class="preview-card" style:max-width={savedWidth}>
-            <section class="preview-frontmatter">
-              <h3>{p.title}</h3>
-              {#if p.coverImage}
-                <img
-                  class="cover-image"
-                  src={p.coverImage}
-                  alt="{p.title} cover image"
-                />
-              {/if}
-              {#if p.entries.length > 0}
-                <div class="preview-grid">
-                  {#each p.entries as [key, value]}
-                    <div class="meta-item">
-                      <span class="meta-key">{key.replaceAll("_", " ")}</span>
-                      <div class="meta-value">
-                        {formatMetaValue(key, value)}
-                      </div>
+            <div class="preview-card-wrapper">
+              <button
+                type="button"
+                class="preview-resize-handle left"
+                data-resize="left"
+                onmousedown={handleResizeMousedown}
+                aria-label="Resize preview panel"
+              >
+                <div class="preview-resize-grip"></div>
+              </button>
+              <article
+                class="preview-card"
+                style:max-width={savedWidth}
+                style:--preview-font-size={`${previewFontSize}px`}
+              >
+                <section class="preview-frontmatter">
+                  <h3>{p.title}</h3>
+                  {#if p.coverImage}
+                    <img
+                      class="cover-image"
+                      src={p.coverImage}
+                      alt="{p.title} cover image"
+                    />
+                  {/if}
+                  {#if p.entries.length > 0}
+                    <div class="preview-grid">
+                      {#each p.entries as [key, value]}
+                        <div class="meta-item">
+                          <span class="meta-key"
+                            >{key.replaceAll("_", " ")}</span
+                          >
+                          <div class="meta-value">
+                            {formatMetaValue(key, value)}
+                          </div>
+                        </div>
+                      {/each}
                     </div>
-                  {/each}
+                  {/if}
+                </section>
+                <div class="preview-content" bind:this={previewContentEl}>
+                  {@html p.bodyHtml}
                 </div>
-              {/if}
-            </section>
-            <div class="preview-content" bind:this={previewContentEl}>
-              {@html p.bodyHtml}
+              </article>
+              <button
+                type="button"
+                class="preview-resize-handle right"
+                data-resize="right"
+                onmousedown={handleResizeMousedown}
+                aria-label="Resize preview panel"
+              >
+                <div class="preview-resize-grip"></div>
+              </button>
             </div>
-          </article>
-          <button
-            type="button"
-            class="preview-resize-handle right"
-            data-resize="right"
-            onmousedown={handleResizeMousedown}
-            aria-label="Resize preview panel"
-          >
-            <div class="preview-resize-grip"></div>
-          </button>
-        </div>
           </div>
         </div>
       {:else}
@@ -588,7 +801,6 @@
     appearance: none;
     background: rgba(12, 10, 9, 0.5);
     z-index: 90;
-    transition: opacity var(--transition);
     cursor: pointer;
     font: inherit;
     color: inherit;
@@ -611,9 +823,6 @@
     display: flex;
     flex-direction: column;
     transform: translateX(100%);
-    transition:
-      transform var(--transition),
-      width var(--transition);
     box-shadow: -8px 0 32px rgba(0, 0, 0, 0.4);
   }
 
@@ -676,8 +885,57 @@
 
   .preview-actions {
     display: flex;
+    align-items: center;
+    flex-wrap: wrap;
     gap: 6px;
     flex-shrink: 0;
+  }
+
+  .preview-font-controls {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-right: 6px;
+    padding: 3px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    background: var(--surface);
+  }
+
+  .preview-font-btn,
+  .preview-font-readout {
+    height: 26px;
+    min-width: 36px;
+    padding: 0 9px;
+    border: none;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-2);
+    font: inherit;
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+    transition:
+      background 150ms,
+      color 150ms,
+      opacity 150ms;
+  }
+
+  .preview-font-readout {
+    min-width: 52px;
+    font-family: "JetBrains Mono", monospace;
+    color: var(--text-3);
+  }
+
+  .preview-font-btn:hover,
+  .preview-font-readout:hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+
+  .preview-font-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
   }
 
   .preview-action-btn,
@@ -769,51 +1027,68 @@
 
   .preview-toc-seam {
     flex-shrink: 0;
-    width: 22px;
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 6px 0 10px;
-    gap: 6px;
-    border-right: 1px solid var(--border-subtle);
+    padding: 6px 8px 10px;
+    gap: 10px;
+    border-right: 1px solid
+      color-mix(in srgb, var(--border-subtle) 85%, var(--text-3) 15%);
     box-sizing: border-box;
   }
 
   .preview-toc-mark {
-    font-size: 11px;
+    font-size: 14px;
     font-family: "Instrument Serif", serif;
-    color: var(--text-3);
+    color: color-mix(in srgb, var(--amber) 88%, var(--text));
     line-height: 1;
     user-select: none;
-    opacity: 0.65;
+    text-shadow: 0 0 16px var(--amber-glow);
+    letter-spacing: -0.03em;
   }
 
   .preview-toc-edge-tab {
     flex-shrink: 0;
     width: 100%;
     margin: 0;
-    padding: 6px 0;
-    border: none;
-    border-radius: 0 5px 5px 0;
-    background: transparent;
-    color: var(--text-3);
+    padding: 7px 0;
+    box-sizing: border-box;
+    border: 1px solid
+      color-mix(in srgb, var(--surface-3) 55%, var(--border-subtle) 45%);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--surface) 92%, var(--ink) 8%);
+    box-shadow:
+      0 1px 0 color-mix(in srgb, var(--text) 5%, transparent),
+      inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent);
+    color: var(--text-2);
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     transition:
       background 140ms ease,
-      color 140ms ease;
+      color 140ms ease,
+      border-color 140ms ease,
+      box-shadow 140ms ease;
   }
 
   .preview-toc-edge-tab:hover {
-    background: color-mix(in srgb, var(--surface-2) 55%, transparent);
+    background: var(--surface-2);
     color: var(--text);
+    border-color: color-mix(in srgb, var(--surface-3) 70%, var(--border) 30%);
+    box-shadow:
+      0 1px 0 color-mix(in srgb, var(--text) 7%, transparent),
+      inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent);
+  }
+
+  .preview-toc-edge-tab:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--amber) 75%, transparent);
+    outline-offset: 2px;
   }
 
   .preview-toc-edge-tab :global(svg) {
-    width: 14px;
-    height: 14px;
+    width: 17px;
+    height: 17px;
   }
 
   .preview-toc-label {
@@ -823,7 +1098,8 @@
     color: var(--text-3);
     padding: 2px 0 8px;
     flex-shrink: 0;
-    border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 70%, transparent);
+    border-bottom: 1px solid
+      color-mix(in srgb, var(--border-subtle) 70%, transparent);
     margin-bottom: 6px;
   }
 
@@ -937,7 +1213,7 @@
 
   :global(.preview-content) {
     line-height: 1.8;
-    font-size: 15px;
+    font-size: var(--preview-font-size, 15px);
     color: var(--text-2);
     overflow-wrap: anywhere;
   }
@@ -953,13 +1229,13 @@
   }
 
   :global(.preview-content h4) {
-    font-size: 1.05rem;
+    font-size: calc(var(--preview-font-size, 15px) * 1.05);
   }
   :global(.preview-content h5) {
-    font-size: 1rem;
+    font-size: calc(var(--preview-font-size, 15px) * 1);
   }
   :global(.preview-content h6) {
-    font-size: 0.95rem;
+    font-size: calc(var(--preview-font-size, 15px) * 0.95);
   }
 
   :global(.preview-content h1),
@@ -973,13 +1249,13 @@
   }
 
   :global(.preview-content h1) {
-    font-size: 1.75rem;
+    font-size: calc(var(--preview-font-size, 15px) * 1.75);
   }
   :global(.preview-content h2) {
-    font-size: 1.4rem;
+    font-size: calc(var(--preview-font-size, 15px) * 1.4);
   }
   :global(.preview-content h3) {
-    font-size: 1.15rem;
+    font-size: calc(var(--preview-font-size, 15px) * 1.15);
   }
 
   :global(.preview-content p),
@@ -1024,8 +1300,9 @@
     pointer-events: auto;
   }
 
-  .preview-resize-handle:hover .preview-resize-grip,
-  .preview-resize-handle:active .preview-resize-grip {
+  .preview-card-wrapper:has(.preview-resize-handle:hover) .preview-resize-grip,
+  .preview-card-wrapper:has(.preview-resize-handle:active)
+    .preview-resize-grip {
     opacity: 1;
     background: var(--amber);
   }

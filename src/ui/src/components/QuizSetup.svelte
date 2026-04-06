@@ -10,9 +10,26 @@
     onclose: () => void;
   } = $props();
 
+  const LANGUAGES = [
+    { value: "", label: "Auto (match document)" },
+    { value: "English", label: "English" },
+    { value: "Polish", label: "Polish" },
+    { value: "German", label: "German" },
+    { value: "French", label: "French" },
+    { value: "Spanish", label: "Spanish" },
+    { value: "Italian", label: "Italian" },
+    { value: "Portuguese", label: "Portuguese" },
+    { value: "Ukrainian", label: "Ukrainian" },
+    { value: "Czech", label: "Czech" },
+    { value: "Japanese", label: "Japanese" },
+    { value: "Chinese", label: "Chinese" },
+    { value: "Korean", label: "Korean" },
+  ] as const;
+
   let selectedDocId = $state<number | null>(null);
   let numQuestions = $state(10);
   let difficulty = $state<"easy" | "medium" | "hard">("medium");
+  let language = $state("");
   let error = $state("");
   let generationCancelled = $state(false);
   let generateAbort: AbortController | null = null;
@@ -57,6 +74,7 @@
           difficulty,
           model: quiz.model || quiz.defaultModel,
           provider: quiz.provider || quiz.defaultProvider,
+          ...(language ? { language } : {}),
         },
         { signal: generateAbort.signal },
       )) {
@@ -162,6 +180,15 @@
         >{d}</button>
       {/each}
     </div>
+  </div>
+
+  <div class="form-group">
+    <label class="field-label" for="quiz-language">Language</label>
+    <select id="quiz-language" bind:value={language}>
+      {#each LANGUAGES as lang}
+        <option value={lang.value}>{lang.label}</option>
+      {/each}
+    </select>
   </div>
 
   {#if error}
