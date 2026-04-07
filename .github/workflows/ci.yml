@@ -25,7 +25,7 @@ jobs:
 
       - name: Install dependencies (UI)
         working-directory: src/ui
-        run: bun install
+        run: bun install --frozen-lockfile
 
       - name: Lint (oxlint)
         run: bun run lint
